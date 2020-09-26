@@ -2,9 +2,7 @@
 
 
 #include "MyActor.h"
-#include "Dom/JsonObject.h"
-#include "Serialization/JsonWriter.h"
-#include "Serialization/JsonSerializer.h"
+
 #include "../Common/JsonHandler.h"
 #include "../Common/OpenCTMHandler.h"
 

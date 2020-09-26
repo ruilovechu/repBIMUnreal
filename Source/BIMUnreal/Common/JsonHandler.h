@@ -5,7 +5,9 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 
+#include "Dom/JsonObject.h"
 #include "Serialization/JsonWriter.h"
+#include "Serialization/JsonSerializer.h"
 
 #include "JsonHandler.generated.h"
 
