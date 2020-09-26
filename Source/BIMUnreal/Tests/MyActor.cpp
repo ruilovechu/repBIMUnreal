@@ -2,7 +2,7 @@
 
 
 #include "MyActor.h"
-#include "Misc/Paths.h"
+#include "../Common/OpenCTMHandler.h"
 
 // Sets default values
 AMyActor::AMyActor()
@@ -19,16 +19,13 @@ void AMyActor::BeginPlay()
 
 	// openCTM dll “˝»Î≤‚ ‘
 	// --------------------
-	FString gamePath = FPaths::ConvertRelativePathToFull(FPaths::GameDir());
-	FString dllpath = gamePath + "/ThirdParty/lib/openctm.dll";
-	void * openctmDllHandle = FPlatformProcess::GetDllHandle(*dllpath);
-	if (openctmDllHandle)
+	if (AOpenCTMHandler::m_CtmAddUVMap && AOpenCTMHandler::m_CtmCompressionLevel)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("openctmDllHandle is not null"));
+		UE_LOG(LogTemp, Warning, TEXT("all are not null 1543"));
 	}
 	else
 	{
-		UE_LOG(LogTemp, Error, TEXT("openctmDllHandle is null"));
+		UE_LOG(LogTemp, Error, TEXT("some is nulla"));
 	}
 }
 
