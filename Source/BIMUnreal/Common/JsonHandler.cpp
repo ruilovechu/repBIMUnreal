@@ -19,6 +19,16 @@ void AJsonHandler::BeginPlay()
 	
 }
 
+FString AJsonHandler::TryGetStringField(TSharedPtr<FJsonValue>& item, FString fieldName, FString defIfFailed)
+{
+	FString out1;
+	if (!item->AsObject()->TryGetStringField(fieldName, out1))
+	{
+		out1 = defIfFailed;
+	}
+	return out1;
+}
+
 // 对象反序列化方法
 // ----------------
 bool AJsonHandler::Deserialize(const FString & inputJson, TSharedPtr<FJsonObject> * pOutParsed)

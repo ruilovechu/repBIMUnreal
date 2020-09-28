@@ -4,27 +4,29 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
-#include "HttpModule.h"
-#include "MyActor.generated.h"
+
+
+
+#include "ConfigHandler.generated.h"
 
 UCLASS()
-class BIMUNREAL_API AMyActor : public AActor
+class BIMUNREAL_API AConfigHandler : public AActor
 {
 	GENERATED_BODY()
 	
 public:	
 	// Sets default values for this actor's properties
-	AMyActor();
+	AConfigHandler();
 
 protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
 
-	// ÇëÇó»Øµ÷
-	void OnRequestComplete(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bConnectedSuccessfully);
+	static FString m_ModelApiUrl;
+	static FString m_NewApiUrl;
 
 public:	
-	// Called every frame
-	//virtual void Tick(float DeltaTime) override;
 
+	static FString GetModelApiUrl();
+	static FString GetNewApiUrl();
 };

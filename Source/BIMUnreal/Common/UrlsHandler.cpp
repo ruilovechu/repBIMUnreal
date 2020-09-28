@@ -1,0 +1,39 @@
+// Fill out your copyright notice in the Description page of Project Settings.
+
+
+#include "UrlsHandler.h"
+#include "../Config/ConfigHandler.h"
+
+FString AUrlsHandler::m_ProjectID = "";
+FString AUrlsHandler::m_ModelID = "";
+FString AUrlsHandler::m_ViewID = "";
+
+// Sets default values
+AUrlsHandler::AUrlsHandler()
+{
+ 	// Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
+	//PrimaryActorTick.bCanEverTick = true;
+
+}
+
+// Called when the game starts or when spawned
+void AUrlsHandler::BeginPlay()
+{
+	Super::BeginPlay();
+	
+}
+
+int AUrlsHandler::InitParameters(FString projectID, FString modelID, FString viewID)
+{
+	AUrlsHandler::m_ProjectID = projectID;
+	AUrlsHandler::m_ModelID = modelID;
+	AUrlsHandler::m_ViewID = viewID;
+	return 0;
+}
+
+FString AUrlsHandler::GetUrlOfGetAllElements()
+{
+	// https://bimcomposer.probim.cn/api/Model/GetAllElementsInView?ProjectID=7d96928d-5add-45cb-a139-2c787141e50d&ModelID=9f49078c-180e-4dc5-b696-5a50a9e09016&VersionNO=&ViewID=142554
+	FString ret = AConfigHandler::GetModelApiUrl() + FString("/api/Model/GetAllElementsInView?ProjectID=") + m_ProjectID + FString("&ModelID=") + m_ModelID + FString("&VersionNO=&ViewID=") + m_ViewID;
+	return ret;
+}

@@ -26,6 +26,10 @@ protected:
 
 public:	
 
+	// 尝试获取 String 字段
+	// --------------------
+	static FString TryGetStringField(TSharedPtr<FJsonValue> & item, FString fieldName, FString defIfFailed);
+
 	// 对象反序列化方法
 	// ----------------
 	static bool Deserialize(const FString & inputJson, TSharedPtr<FJsonObject> * pOutParsed);
