@@ -35,4 +35,9 @@ public:
 	// ------------------------------------
 	static FString GetUrlOfGetAllElements();
 
+	// get api url like this: https://bimcomposer.probim.cn/api/Model/GetBlockCacheCount?ProjectID=46d11566-6b7e-47a1-ba5d-12761ab9b55c&ModelID=58080653-18d1-4067-b480-e02c56eb791a&VersionNO=&ViewID=168550
+	// you must call InitParameters firstly
+	// ------------------------------------
+	static FString GetUrlOfGetBlockCacheCount();
+
 };

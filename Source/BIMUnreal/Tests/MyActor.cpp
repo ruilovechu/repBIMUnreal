@@ -10,6 +10,7 @@
 #include "../Common/StringHandler.h"
 
 #include "Interfaces/IHttpResponse.h"
+#include "Misc/CString.h"
 
 // Sets default values
 AMyActor::AMyActor()
@@ -47,8 +48,18 @@ void AMyActor::BeginPlay()
 	httpReuest->SetVerb(TEXT("GET"));
 	httpReuest->SetHeader(TEXT("Content-Type"), TEXT("APPLICATION/x-www-from-urlencoded"));
 	httpReuest->SetURL(allEleurls);
-	httpReuest->OnProcessRequestComplete().BindUObject(this, &AMyActor::OnRequestComplete);
+	httpReuest->OnProcessRequestComplete().BindUObject(this, &AMyActor::OnRequestComplete_AllElementsInView);
 	httpReuest->ProcessRequest();
+
+	// 请求接口测试2
+	// -------------
+	FString urlOfCacheBlockCnt = AUrlsHandler::GetUrlOfGetBlockCacheCount();
+	TSharedRef<IHttpRequest> httpReuest2 = FHttpModule::Get().CreateRequest();
+	httpReuest2->SetVerb(TEXT("GET"));
+	httpReuest2->SetHeader(TEXT("Content-Type"), TEXT("APPLICATION/x-www-from-urlencoded"));
+	httpReuest2->SetURL(urlOfCacheBlockCnt);
+	httpReuest2->OnProcessRequestComplete().BindUObject(this, &AMyActor::OnRequestComplete_CacheBlockCount);
+	httpReuest2->ProcessRequest();
 
 	// json 操作测试
 	// -------------
@@ -100,7 +111,7 @@ void AMyActor::BeginPlay()
 	}
 }
 
-void AMyActor::OnRequestComplete(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bConnectedSuccessfully)
+void AMyActor::OnRequestComplete_AllElementsInView(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bConnectedSuccessfully)
 {
 	if (!Request.IsValid() || !Response.IsValid())
 	{
@@ -194,6 +205,33 @@ void AMyActor::OnRequestComplete(FHttpRequestPtr Request, FHttpResponsePtr Respo
 		else
 		{
 			UE_LOG(LogTemp, Warning, TEXT("des err!"));
+		}
+	}
+}
+
+void AMyActor::OnRequestComplete_CacheBlockCount(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bConnectedSuccessfully)
+{
+	if (!Request.IsValid() || !Response.IsValid())
+	{
+		return;
+	}
+
+	if (bConnectedSuccessfully)
+	{
+		// 拿到 res，得到接口返回的字符串
+		// ------------------------------
+		IHttpResponse * res = Response.Get();
+		FString ContentJson = Response->GetContentAsString();
+
+		// 将返回的字符串转为数字，作为获得的 block 的个数
+		// -----------------------------------------------
+		int blockFileCount = FCString::Atoi(*ContentJson);
+
+		// 从1开始，针对每个数字，再调用 https://bimcomposer.probim.cn/api/Model/GetCacheBlock?FileID=
+		// -------------------------------------------------------------------------------------------
+		for (int i = 1; i <= blockFileCount; i++) 
+		{
+			UE_LOG(LogTemp, Warning, TEXT("to call GetCacheBlock?FileID= %d"), i);
 		}
 	}
 }
