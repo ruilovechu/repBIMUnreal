@@ -29,6 +29,46 @@ FString AJsonHandler::TryGetStringField(TSharedPtr<FJsonValue>& item, FString fi
 	return out1;
 }
 
+bool AJsonHandler::TryGetBoolField(TSharedPtr<FJsonValue>& item, FString fieldName, bool defIfFailed)
+{
+	bool out1;
+	if (!item->AsObject()->TryGetBoolField(fieldName, out1))
+	{
+		out1 = defIfFailed;
+	}
+	return out1;
+}
+
+double AJsonHandler::TryGetNumberField(TSharedPtr<FJsonValue>& item, FString fieldName, double defIfFailed)
+{
+	double out1;
+	if (!item->AsObject()->TryGetNumberField(fieldName, out1))
+	{
+		out1 = defIfFailed;
+	}
+	return out1;
+}
+
+FString AJsonHandler::TryGetStringField_FromObj(TSharedPtr<FJsonObject>& item, FString fieldName, FString defIfFailed)
+{
+	FString out1;
+	if (!item->TryGetStringField(fieldName, out1))
+	{
+		out1 = defIfFailed;
+	}
+	return out1;
+}
+
+bool AJsonHandler::TryGetBoolField_FromObj(TSharedPtr<FJsonObject>& item, FString fieldName, bool defIfFailed)
+{
+	bool out1;
+	if (!item->TryGetBoolField(fieldName, out1))
+	{
+		out1 = defIfFailed;
+	}
+	return out1;
+}
+
 // 对象反序列化方法
 // ----------------
 bool AJsonHandler::Deserialize(const FString & inputJson, TSharedPtr<FJsonObject> * pOutParsed)

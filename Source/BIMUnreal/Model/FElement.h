@@ -4,6 +4,8 @@
 
 #include "CoreMinimal.h"
 
+#include "FBlockMapping.h"
+
 /**
  * 
  */
@@ -23,6 +25,11 @@ public:
 	FString LinkID;
 	FString LinkLevelID;
 	FString BlockMapping;
+
+	// 使用多余的字段来解析实际类型，但原来的字段还保留
+	// ------------------------------------------------
+	FBlockMapping BlockMapping_obj;
+
 	FString Override;
 	FString SourceElementID;
 	FString MergeParent;

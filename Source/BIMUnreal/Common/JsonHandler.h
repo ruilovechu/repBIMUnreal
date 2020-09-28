@@ -30,6 +30,22 @@ public:
 	// --------------------
 	static FString TryGetStringField(TSharedPtr<FJsonValue> & item, FString fieldName, FString defIfFailed);
 
+	// 尝试获取 Bool 字段
+	// ------------------
+	static bool TryGetBoolField(TSharedPtr<FJsonValue>& item, FString fieldName, bool defIfFailed);
+
+	// 尝试获取 double 字段
+	// ------------------
+	static double TryGetNumberField(TSharedPtr<FJsonValue>& item, FString fieldName, double defIfFailed);
+
+	// 尝试获取 String 字段(单对象版本)
+	// --------------------------------
+	static FString TryGetStringField_FromObj(TSharedPtr<FJsonObject> & item, FString fieldName, FString defIfFailed);
+
+	// 尝试获取 Bool 字段(单对象版本)
+	// ------------------------------
+	static bool TryGetBoolField_FromObj(TSharedPtr<FJsonObject>& item, FString fieldName, bool defIfFailed);
+
 	// 对象反序列化方法
 	// ----------------
 	static bool Deserialize(const FString & inputJson, TSharedPtr<FJsonObject> * pOutParsed);

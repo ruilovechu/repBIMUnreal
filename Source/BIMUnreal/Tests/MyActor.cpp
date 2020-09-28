@@ -7,6 +7,7 @@
 #include "../Common/OpenCTMHandler.h"
 #include "../Common/UrlsHandler.h"
 #include "../Model/FElement.h"
+#include "../Common/StringHandler.h"
 
 #include "Interfaces/IHttpResponse.h"
 
@@ -130,12 +131,65 @@ void AMyActor::OnRequestComplete(FHttpRequestPtr Request, FHttpResponsePtr Respo
 				// ------------------------------------------------------------
 				FElement ele;
 				ele.ElementID = AJsonHandler::TryGetStringField(originParsed[i], FString("ElementID"), FString(""));
+				ele.Name = AJsonHandler::TryGetStringField(originParsed[i], FString("Name"), FString(""));
+				ele.TypeID = AJsonHandler::TryGetStringField(originParsed[i], FString("TypeID"), FString(""));
+				ele.TypeName = AJsonHandler::TryGetStringField(originParsed[i], FString("TypeName"), FString(""));
+				ele.FamilyID = AJsonHandler::TryGetStringField(originParsed[i], FString("FamilyID"), FString(""));
+				ele.FamilyName = AJsonHandler::TryGetStringField(originParsed[i], FString("FamilyName"), FString(""));
+				ele.CategoryID = AJsonHandler::TryGetStringField(originParsed[i], FString("CategoryID"), FString(""));
+				ele.CategoryName = AJsonHandler::TryGetStringField(originParsed[i], FString("CategoryName"), FString(""));
+				ele.Properties = AJsonHandler::TryGetStringField(originParsed[i], FString("Properties"), FString(""));
+				ele.LevelID = AJsonHandler::TryGetStringField(originParsed[i], FString("LevelID"), FString(""));
+				ele.LinkID = AJsonHandler::TryGetStringField(originParsed[i], FString("LinkID"), FString(""));
+				ele.LinkLevelID = AJsonHandler::TryGetStringField(originParsed[i], FString("LinkLevelID"), FString(""));
+				ele.BlockMapping = AJsonHandler::TryGetStringField(originParsed[i], FString("BlockMapping"), FString(""));
+				ele.Override = AJsonHandler::TryGetStringField(originParsed[i], FString("Override"), FString(""));
+				ele.SourceElementID = AJsonHandler::TryGetStringField(originParsed[i], FString("SourceElementID"), FString(""));
+				ele.MergeParent = AJsonHandler::TryGetStringField(originParsed[i], FString("MergeParent"), FString(""));
+				ele.IsMerge = AJsonHandler::TryGetBoolField(originParsed[i], FString("IsMerge"), false);
+				ele.Is2D = AJsonHandler::TryGetBoolField(originParsed[i], FString("Is2D"), false);
+				ele.Batch = AJsonHandler::TryGetStringField(originParsed[i], FString("Batch"), FString(""));
+				ele.ViewOverride = AJsonHandler::TryGetStringField(originParsed[i], FString("ViewOverride"), FString(""));
+
+				// 解析 BlockMapping_obj
+				// ---------------------
+				//ele.BlockMapping_obj.blockMappingItems 
+				TSharedPtr<FJsonObject> tempParsed;
+				bool tempFlag = AJsonHandler::Deserialize(ele.BlockMapping, &tempParsed);
+				if (tempFlag)
+				{
+					// 这里先硬编码，由于 blockMappingItems 不是个字符串，而是直接的数组
+					// 需要 blockMappingItems 换个中间类型，用来接收数组
+					// -------------------------------------------------
+					ele.BlockMapping_obj.blockMappingItems = tempParsed.Get()->GetArrayField(FString("blockMappingItems"));
+
+					// blockMappingItems 有值了，该构造 blockMappingItems_objlist 了
+					// -------------------------------------------------------------
+					for (int j = 0; j < ele.BlockMapping_obj.blockMappingItems.Num(); j++)
+					{
+						auto & item = ele.BlockMapping_obj.blockMappingItems[j];
+
+						// 构造 FBlockMapping_Item
+						// -----------------------
+						FBlockMapping_Item blockMappingItem;
+						blockMappingItem.blockId = AJsonHandler::TryGetStringField(item, FString("blockId"), FString(""));
+						blockMappingItem.materialId = AJsonHandler::TryGetStringField(item, FString("materialId"), FString(""));
+						blockMappingItem.rpc = AJsonHandler::TryGetBoolField(item, FString("rpc"), false);
+						blockMappingItem.transform = AJsonHandler::TryGetStringField(item, FString("transform"), FString(""));
+						blockMappingItem.transform_list = AStringHandler::SplitToDoubleArray(blockMappingItem.transform, TEXT(","));
+
+						// blockMappingItems => blockMappingItems_objlist
+						// ----------------------------------------------
+						ele.BlockMapping_obj.blockMappingItems_objlist.Add(blockMappingItem);
+					}
+				}
+
 				eles.Add(ele);
 			}
 
 			// 打印输出 eles 的个数
 			// --------------------
-			UE_LOG(LogTemp, Warning, TEXT("2 eles's Num is %d"), eles.Num());
+			UE_LOG(LogTemp, Error, TEXT("7 ---- %d"), (eles[eles.Num() - 1].BlockMapping_obj.blockMappingItems_objlist[0].transform_list.Num()));
 		}
 		else
 		{
