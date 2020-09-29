@@ -44,3 +44,10 @@ FString AUrlsHandler::GetUrlOfGetBlockCacheCount()
 	FString ret = AConfigHandler::GetModelApiUrl() + FString("/api/Model/GetBlockCacheCount?ProjectID=") + m_ProjectID + FString("&ModelID=") + m_ModelID + FString("&VersionNO=&ViewID=") + m_ViewID;
 	return ret;
 }
+
+FString AUrlsHandler::GetUrlOfGetCacheBlock(int FileID)
+{
+	// https://bimcomposer.probim.cn/api/Model/GetCacheBlock?FileID=1&ProjectID=46d11566-6b7e-47a1-ba5d-12761ab9b55c&ModelID=58080653-18d1-4067-b480-e02c56eb791a&VersionNO=&ViewID=168550
+	FString ret = AConfigHandler::GetModelApiUrl() + FString("/api/Model/GetCacheBlock?FileID=") + FString::FromInt(FileID) + FString("&ProjectID=") + m_ProjectID + FString("&ModelID=") + m_ModelID + FString("&VersionNO=&ViewID=") + m_ViewID;
+	return ret;
+}

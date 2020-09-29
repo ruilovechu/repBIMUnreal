@@ -24,9 +24,14 @@ protected:
 	// --------
 	void OnRequestComplete_AllElementsInView(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bConnectedSuccessfully);
 	void OnRequestComplete_CacheBlockCount(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bConnectedSuccessfully);
+	void OnRequestComplete_GetCacheBlock(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bConnectedSuccessfully);
 
 public:	
 	// Called every frame
 	//virtual void Tick(float DeltaTime) override;
+
+	// ½âÎö block buffer
+	// -----------------
+	void AnalysisBuffer(BYTE * buffer, int size);
 
 };

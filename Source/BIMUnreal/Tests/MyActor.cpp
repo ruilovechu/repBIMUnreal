@@ -200,7 +200,7 @@ void AMyActor::OnRequestComplete_AllElementsInView(FHttpRequestPtr Request, FHtt
 
 			// 打印输出 eles 的个数
 			// --------------------
-			UE_LOG(LogTemp, Error, TEXT("7 ---- %d"), (eles[eles.Num() - 1].BlockMapping_obj.blockMappingItems_objlist[0].transform_list.Num()));
+			//UE_LOG(LogTemp, Error, TEXT("7 ---- %d"), (eles[eles.Num() - 1].BlockMapping_obj.blockMappingItems_objlist[0].transform_list.Num()));
 		}
 		else
 		{
@@ -227,19 +227,138 @@ void AMyActor::OnRequestComplete_CacheBlockCount(FHttpRequestPtr Request, FHttpR
 		// -----------------------------------------------
 		int blockFileCount = FCString::Atoi(*ContentJson);
 
-		// 从1开始，针对每个数字，再调用 https://bimcomposer.probim.cn/api/Model/GetCacheBlock?FileID=
+		// 从1开始，针对每个数字，再调用 https://bimcomposer.probim.cn/api/Model/GetCacheBlock?FileID=1&ProjectID=46d11566-6b7e-47a1-ba5d-12761ab9b55c&ModelID=58080653-18d1-4067-b480-e02c56eb791a&VersionNO=&ViewID=168550
 		// -------------------------------------------------------------------------------------------
 		for (int i = 1; i <= blockFileCount; i++) 
 		{
 			UE_LOG(LogTemp, Warning, TEXT("to call GetCacheBlock?FileID= %d"), i);
+
+			// 得到当前的 url 地址
+			// -------------------
+
+			// 请求接口测试2
+			// -------------
+			FString urlOfCacheBlock = AUrlsHandler::GetUrlOfGetCacheBlock(i);
+			TSharedRef<IHttpRequest> httpReuestTemp = FHttpModule::Get().CreateRequest();
+			httpReuestTemp->SetVerb(TEXT("GET"));
+			httpReuestTemp->SetHeader(TEXT("Content-Type"), TEXT("APPLICATION/x-www-from-urlencoded"));
+			httpReuestTemp->SetURL(urlOfCacheBlock);
+			httpReuestTemp->OnProcessRequestComplete().BindUObject(this, &AMyActor::OnRequestComplete_GetCacheBlock);
+			httpReuestTemp->ProcessRequest();
 		}
 	}
 }
 
-//// Called every frame
-//void AMyActor::Tick(float DeltaTime)
-//{
-//	Super::Tick(DeltaTime);
-//
-//}
+void AMyActor::OnRequestComplete_GetCacheBlock(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bConnectedSuccessfully)
+{
+	UE_LOG(LogTemp, Warning, TEXT("in OnRequestComplete_GetCacheBlock callback"));
+	if (!Request.IsValid() || !Response.IsValid())
+	{
+		return;
+	}
+	if (bConnectedSuccessfully)
+	{
+		FString urlReqed = Response.Get()->GetURL();
+		UE_LOG(LogTemp, Warning, TEXT("in OnRequestComplete_GetCacheBlock callback, the URL is %s"), *urlReqed);
 
+		// 拿到这个 block 返回的 buffer
+		// ----------------------------
+		TArray<uint8> resBuffer = Response.Get()->GetContent();
+		UE_LOG(LogTemp, Warning, TEXT("buffer length is %d"), resBuffer.Num());
+
+		// 转为字节数组
+		// ------------
+		BYTE* buffer = reinterpret_cast<BYTE*>(resBuffer.GetData());
+
+		// 调用方法，解析这个字节数组
+		// --------------------------
+		AMyActor::AnalysisBuffer(buffer, resBuffer.Num());
+	}
+}
+
+// 解析这个字节数组
+// ----------------
+void AMyActor::AnalysisBuffer(BYTE * buffer, int size)
+{
+	int offset = 0;
+
+	// 由于返回的数据可能不止含有一段 |B365|
+	// 这里用循环来取多个 blockBuffer
+	// ------------------------------
+	int looptimes = 0;
+	while (offset < size)
+	{
+		// 输出循环次数
+		// ------------
+		UE_LOG(LogTemp, Warning, TEXT("looptimes : %d"), looptimes);
+
+		looptimes++;
+
+		// 首先要跳过 |B365|
+		// -----------------
+		offset += strlen("|B365|");
+
+		// 声明记录 blockId 的长度的变量
+		// -----------------------------
+		int blockIdLength;
+
+		// 接下来取4个字节，存储到 blockIdLength 中
+		// 取完后马上记录偏移位置
+		// ----------------------
+		memcpy(&blockIdLength, buffer + offset, sizeof(int));
+		offset += sizeof(int);
+
+		// 调试输出 blockIdLength 的值
+		// ---------------------------
+		UE_LOG(LogTemp, Warning, TEXT("blockIdLength = %d"), blockIdLength);
+
+		// 声明 blockIdLength 个字节的 BYTE，用于存储 blockId 的值
+		// -------------------------------------------------------
+		BYTE * blockIdBuffer = (BYTE*)calloc(blockIdLength, sizeof(BYTE));
+
+		// 拷贝 blockIdLength 个字节到 blockIdBuffer
+		// 取完后马上记录偏移位置
+		// ----------------------
+		memcpy(blockIdBuffer, buffer + offset, blockIdLength);
+		TCHAR* blockIdBuffer_utf8 = UTF8_TO_TCHAR(blockIdBuffer);
+		offset += blockIdLength;
+
+		// 调试输出 blockIdBuffer_utf8 的值
+		// ---------------------------
+		UE_LOG(LogTemp, Warning, TEXT("blockIdBuffer_utf8 = %s"), blockIdBuffer_utf8);
+
+		// 接下来应该是 |ID GEO| 这个字符串，拷贝输出验证
+		// ----------------------------------------------
+		TCHAR ch[9] = { 0 };
+		memcpy(ch, buffer + offset, 8);
+		TCHAR * ch_uft8 = UTF8_TO_TCHAR(ch);
+		UE_LOG(LogTemp, Warning, TEXT("ch_uft8 = %s"), ch_uft8);
+		offset += strlen("|ID GEO|");
+
+		// 再读4个字节，拿到contentLength
+		// ------------------------------
+		int contentLength;
+		memcpy(&contentLength, buffer + offset, sizeof(int));
+		UE_LOG(LogTemp, Warning, TEXT("contentLength = %d"), contentLength);
+		offset += 4;
+
+		// 先读 contentLength 个字节，读完后再偏移contentLength 个字节，进入下一个循环
+		// ---------------------------------------------------------------------------
+		BYTE * contentBuffer = (BYTE*)calloc(contentLength, sizeof(BYTE));
+		memcpy(contentBuffer, buffer + offset, contentLength);
+		offset += contentLength;
+
+		// 写完 calloc，马上写 free
+		// ------------------------
+		if (blockIdBuffer)
+		{
+			free(blockIdBuffer);
+			blockIdBuffer = NULL;
+		}
+		if (contentBuffer)
+		{
+			free(contentBuffer);
+			contentBuffer = NULL;
+		}
+	}
+}
