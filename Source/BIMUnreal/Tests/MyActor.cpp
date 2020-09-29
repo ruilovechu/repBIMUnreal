@@ -12,6 +12,10 @@
 #include "Interfaces/IHttpResponse.h"
 #include "Misc/CString.h"
 
+#define VERTEX_3		3
+#define INDICATE_3		3
+#define VERTEX_UV_2		2
+
 // Sets default values
 AMyActor::AMyActor()
 {
@@ -276,6 +280,26 @@ void AMyActor::OnRequestComplete_GetCacheBlock(FHttpRequestPtr Request, FHttpRes
 	}
 }
 
+// ctmLoadCustom 回调
+// ------------------
+CTMuint CTMRreadfn(void* aBuf, CTMuint aCount, void* aUserData)
+{
+	static int count = 0;
+	static void* ptr = nullptr;
+
+	if (ptr != aUserData)
+	{
+		count = 0;
+		ptr = aUserData;
+	}
+
+	memcpy((char*)aBuf, (char*)ptr + count, aCount * sizeof(char));
+	count += aCount;
+
+	return aCount;
+}
+
+
 // 解析这个字节数组
 // ----------------
 void AMyActor::AnalysisBuffer(BYTE * buffer, int size)
@@ -347,6 +371,32 @@ void AMyActor::AnalysisBuffer(BYTE * buffer, int size)
 		BYTE * contentBuffer = (BYTE*)calloc(contentLength, sizeof(BYTE));
 		memcpy(contentBuffer, buffer + offset, contentLength);
 		offset += contentLength;
+
+		// openCTM 解析测试
+		// ----------------
+		CTMcontext context = AOpenCTMHandler::m_CtmNewContext(CTMenum::CTM_IMPORT);
+		if (context)
+		{
+			// 调用 openCTM 的 LoadCustom
+			// --------------------------
+			AOpenCTMHandler::m_CtmLoadCustom(context, CTMRreadfn, contentBuffer);
+
+			// 调用各 api 获取数据
+			// -------------------
+			int vertex_comp_cnt = AOpenCTMHandler::m_CtmGetInteger(context, CTMenum::CTM_VERTEX_COUNT) * VERTEX_3;
+			UE_LOG(LogTemp, Warning, TEXT("vertex_comp_cnt = %d"), vertex_comp_cnt);
+
+			int indicate_comp_cnt = AOpenCTMHandler::m_CtmGetInteger(context, CTMenum::CTM_TRIANGLE_COUNT) * INDICATE_3; // 索引个数
+			UE_LOG(LogTemp, Warning, TEXT("indicate_comp_cnt = %d"), indicate_comp_cnt);
+
+			int uv_comp_cnt = AOpenCTMHandler::m_CtmGetInteger(context, CTMenum::CTM_VERTEX_COUNT) * VERTEX_UV_2;
+			UE_LOG(LogTemp, Warning, TEXT("uv_comp_cnt = %d"), uv_comp_cnt);
+
+			// 直接卸载
+			// --------
+			AOpenCTMHandler::m_CtmFreeContext(context);
+			context = NULL;
+		}
 
 		// 写完 calloc，马上写 free
 		// ------------------------
