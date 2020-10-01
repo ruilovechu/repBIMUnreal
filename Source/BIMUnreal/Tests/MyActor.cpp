@@ -11,6 +11,9 @@
 
 #include "Interfaces/IHttpResponse.h"
 #include "Misc/CString.h"
+#include "Materials/Material.h"
+#include "Materials/MaterialInstance.h"
+#include "UObject/ConstructorHelpers.h"
 
 #define VERTEX_3		3
 #define INDICATE_3		3
@@ -24,6 +27,12 @@ AMyActor::AMyActor()
 
 	ProceduralMeshComp = CreateDefaultSubobject<UProceduralMeshComponent>("ProceduralMeshComp");
 	RootComponent = ProceduralMeshComp;
+
+	static ConstructorHelpers::FObjectFinder<UMaterial> MaterialOb(TEXT("Material'/Game/Materials/MTR_T1.MTR_T1'"));
+	Material = MaterialOb.Object;
+
+	/*static ConstructorHelpers::FObjectFinder<UMaterialInstance> MaterialInsOb(TEXT("MaterialInstanceConstant'/Game/MaterialInstances/MTR_T1_Inst.MTR_T1_Inst'"));
+	MaterialInstance = MaterialInsOb.Object;*/
 }
 
 // Called when the game starts or when spawned
@@ -406,6 +415,7 @@ void AMyActor::AnalysisBuffer(BYTE * buffer, int size)
 			TArray<FVector> normalsArr;
 			TArray<int32> indicesArr;
 			TArray<FVector2D> uvsArr;
+			TArray<FLinearColor> linearArr;
 
 			// 获取顶点数组
 			// ------------
@@ -415,6 +425,8 @@ void AMyActor::AnalysisBuffer(BYTE * buffer, int size)
 				//UE4中是模型是以厘米为单位
 				// ------------------------
 				verticesArr.Add(FVector(vertices[i] * 100, vertices[i + 1] * 100, vertices[i + 2] * 100));
+
+				linearArr.Add(FLinearColor(255.0f, 0, 0, 0.8));
 			}
 
 			// 获取索引数组
@@ -454,15 +466,55 @@ void AMyActor::AnalysisBuffer(BYTE * buffer, int size)
 			// CreateMeshSection_LinearColor 推荐使用此方法
 			int index = meshIndex;
 			meshIndex++;
-			ProceduralMeshComp->CreateMeshSection_LinearColor(index, verticesArr, indicesArr, normalsArr, uvsArr, TArray<FLinearColor>(), TArray<FProcMeshTangent>(), false);
+			ProceduralMeshComp->CreateMeshSection_LinearColor(index, verticesArr, indicesArr, normalsArr, uvsArr, linearArr, TArray<FProcMeshTangent>(), false);
 
-			//////// FProcMeshSection 数据
-			//////// 分别设置 ProcVertexBuffer 及 ProcIndexBuffer
-			//////// --------------------------------------------
-			//////FProcMeshSection meshSection;
-			////////meshSection.ProcIndexBuffer = indicesArr;
-			////////meshSection.ProcVertexBuffer
-			////////ProceduralMeshComp->SetProcMeshSection(index, meshSection);
+			// 设置材质
+			// --------
+			auto MaterialInstanceDnm2 = UMaterialInstanceDynamic::Create(this->Material, this, FName(*(FString("MI_Dynamic") + FString::FromInt(index))));
+			if (MaterialInstanceDnm2)
+			{
+				int randomI = FMath::RandHelper(255);
+				UE_LOG(LogTemp, Warning, TEXT("randomI = %d"), randomI);
+				if (index % 3 == 1)
+				{
+					MaterialInstanceDnm2->SetVectorParameterValue("AV3", FLinearColor(255 * 1.0f, 0 * 1.0f, 0 * 1.0f, 1));
+				}
+				else if (index % 3 == 2)
+				{
+					MaterialInstanceDnm2->SetVectorParameterValue("AV3", FLinearColor(0 * 1.0f, 255 * 1.0f, 0 * 1.0f, 1));
+				}
+				else
+				{
+					MaterialInstanceDnm2->SetVectorParameterValue("AV3", FLinearColor(0 * 1.0f, 0 * 1.0f, 255 * 1.0f, 1));
+				}
+				ProceduralMeshComp->SetMaterial(index, MaterialInstanceDnm2);
+			}
+			else
+			{
+				UE_LOG(LogTemp, Warning, TEXT("MaterialInstanceDnm is null"));
+			}
+
+			// 一个测试
+			// --------
+			TArray<UMaterialInterface *> mtris;
+			ProceduralMeshComp->GetUsedMaterials(mtris);
+			UE_LOG(LogTemp, Warning, TEXT("mtris' num is %d"), mtris.Num());
+
+			// 设置材质
+			// --------
+			/*if (index == 0)
+			{
+				static ConstructorHelpers::FObjectFinder<UMaterialInstance> TankStaticMesh(TEXT("MaterialInstanceConstant'/Engine/EditorMaterials/Utilities/LinearColorPicker_MATInst.LinearColorPicker_MATInst'"));
+				if (TankStaticMesh.Succeeded())
+				{
+					ProceduralMeshComp->SetMaterial(index, TankStaticMesh.Object);
+				}
+				else
+				{
+					UE_LOG(LogTemp, Warning, TEXT("TankStaticMesh is invalid"));
+				}
+			}*/
+		
 
 			// 直接卸载
 			// --------

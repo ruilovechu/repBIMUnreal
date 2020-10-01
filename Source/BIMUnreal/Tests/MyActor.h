@@ -6,6 +6,9 @@
 #include "GameFramework/Actor.h"
 #include "HttpModule.h"
 #include "ProceduralMeshComponent.h" //ProceduralMeshComponent Module
+#include "Materials/Material.h"
+#include "Materials/MaterialInstance.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "MyActor.generated.h"
 
 UCLASS()
@@ -19,8 +22,17 @@ public:
 
 	// 可编程 Mesh 组件
 	// ----------------
-	UPROPERTY(VisibleAnywhere)
+	UPROPERTY(VisibleAnywhere, BlueprintReadWrite)
 	UProceduralMeshComponent * ProceduralMeshComp;
+
+	UPROPERTY(VisibleAnywhere, Category = ProcMesh)
+	UMaterial* Material;
+
+	/*UPROPERTY(VisibleAnywhere, Category = ProcMesh)
+	UMaterialInstance * MaterialInstance;
+
+	UPROPERTY(VisibleAnywhere, Category = ProcMesh)
+	UMaterialInstanceDynamic * MaterialInstanceDnm;*/
 
 protected:
 	// Called when the game starts or when spawned
