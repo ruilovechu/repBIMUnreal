@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "HttpModule.h"
+#include "ProceduralMeshComponent.h" //ProceduralMeshComponent Module
 #include "MyActor.generated.h"
 
 UCLASS()
@@ -15,6 +16,11 @@ class BIMUNREAL_API AMyActor : public AActor
 public:	
 	// Sets default values for this actor's properties
 	AMyActor();
+
+	// 可编程 Mesh 组件
+	// ----------------
+	UPROPERTY(VisibleAnywhere)
+	UProceduralMeshComponent * ProceduralMeshComp;
 
 protected:
 	// Called when the game starts or when spawned

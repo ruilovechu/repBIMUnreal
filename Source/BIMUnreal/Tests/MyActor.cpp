@@ -22,6 +22,8 @@ AMyActor::AMyActor()
  	// Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	//PrimaryActorTick.bCanEverTick = true;
 
+	ProceduralMeshComp = CreateDefaultSubobject<UProceduralMeshComponent>("ProceduralMeshComp");
+	RootComponent = ProceduralMeshComp;
 }
 
 // Called when the game starts or when spawned
@@ -42,7 +44,7 @@ void AMyActor::BeginPlay()
 
 	// 地址拼接测试
 	// ------------
-	AUrlsHandler::InitParameters(FString("7d96928d-5add-45cb-a139-2c787141e50d"), FString("9f49078c-180e-4dc5-b696-5a50a9e09016"), FString("142554"));
+	AUrlsHandler::InitParameters(FString("46d11566-6b7e-47a1-ba5d-12761ab9b55c"), FString("67170069-1711-4f4c-8ee0-a715325942a1"), FString("69323"));
 	FString allEleurls = AUrlsHandler::GetUrlOfGetAllElements();
 	UE_LOG(LogTemp, Error, TEXT("allEleurls == %s"), *allEleurls);
 
@@ -306,6 +308,8 @@ void AMyActor::AnalysisBuffer(BYTE * buffer, int size)
 {
 	int offset = 0;
 
+	static int meshIndex = 0;
+
 	// 由于返回的数据可能不止含有一段 |B365|
 	// 这里用循环来取多个 blockBuffer
 	// ------------------------------
@@ -391,6 +395,74 @@ void AMyActor::AnalysisBuffer(BYTE * buffer, int size)
 
 			int uv_comp_cnt = AOpenCTMHandler::m_CtmGetInteger(context, CTMenum::CTM_VERTEX_COUNT) * VERTEX_UV_2;
 			UE_LOG(LogTemp, Warning, TEXT("uv_comp_cnt = %d"), uv_comp_cnt);
+
+			// 获取数据
+			// 顶点数组
+			// 法线数组
+			// 索引数组
+			// uv数组
+			// ------
+			TArray<FVector> verticesArr;
+			TArray<FVector> normalsArr;
+			TArray<int32> indicesArr;
+			TArray<FVector2D> uvsArr;
+
+			// 获取顶点数组
+			// ------------
+			const CTMfloat * vertices = AOpenCTMHandler::m_CtmGetFloatArray(context, CTMenum::CTM_VERTICES);
+			for (size_t i = 0; i < vertex_comp_cnt; i += VERTEX_3)
+			{
+				//UE4中是模型是以厘米为单位
+				// ------------------------
+				verticesArr.Add(FVector(vertices[i] * 100, vertices[i + 1] * 100, vertices[i + 2] * 100));
+			}
+
+			// 获取索引数组
+			// ------------
+			const CTMuint * indicates = AOpenCTMHandler::m_CtmGetIntegerArray(context, CTMenum::CTM_INDICES);
+			for (size_t i = 0; i < indicate_comp_cnt; i++)
+			{
+				indicesArr.Add(indicates[i]);
+			}
+
+			// 获取uv数组
+			// ----------
+			const CTMfloat * uvs = AOpenCTMHandler::m_CtmGetFloatArray(context, CTMenum::CTM_UV_MAP_1);
+			for (size_t i = 0; i < uv_comp_cnt; i+= VERTEX_UV_2)
+			{
+				// 以厘米为单位
+				// ------------
+				uvsArr.Add(FVector2D(uvs[i] * 100, uvs[i + 1] * 100));
+			}
+
+			// *获取法线数组(vertex_comp_cnt 与顶点（分量）个数相同)
+			// 这部分可以不填，但会影响光照。当你必须要计算反光效果时候，这些参数必须计算。顶点的法线一般可以理解为：在该点所在的三角面上由该点与另外的两个点组成的两个向量的叉乘（一般向量方向由右手法则来确定），叉乘结果再归一化。
+			// 法线数组，数组的大小等于网格顶点坐标的数量
+			// -----------------------------------------------------
+			const CTMfloat * normals = AOpenCTMHandler::m_CtmGetFloatArray(context, CTMenum::CTM_NORMALS);
+			for (size_t i = 0; i < vertex_comp_cnt; i+= VERTEX_3)
+			{
+				normalsArr.Add(FVector(normals[i], normals[i + 1], normals[i + 2]));
+			}
+
+			// 测试输出
+			// --------
+			UE_LOG(LogTemp, Warning, TEXT("verticesArr's len: %d, normalArr's len: %d, indicesArr's len: %d, uvs's len: %d"), verticesArr.Num(), normalsArr.Num(), indicesArr.Num(), uvsArr.Num());
+
+			// Create Mesh Section
+			// -------------------
+			// CreateMeshSection_LinearColor 推荐使用此方法
+			int index = meshIndex;
+			meshIndex++;
+			ProceduralMeshComp->CreateMeshSection_LinearColor(index, verticesArr, indicesArr, normalsArr, uvsArr, TArray<FLinearColor>(), TArray<FProcMeshTangent>(), false);
+
+			//////// FProcMeshSection 数据
+			//////// 分别设置 ProcVertexBuffer 及 ProcIndexBuffer
+			//////// --------------------------------------------
+			//////FProcMeshSection meshSection;
+			////////meshSection.ProcIndexBuffer = indicesArr;
+			////////meshSection.ProcVertexBuffer
+			////////ProceduralMeshComp->SetProcMeshSection(index, meshSection);
 
 			// 直接卸载
 			// --------
