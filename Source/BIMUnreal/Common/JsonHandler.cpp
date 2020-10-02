@@ -49,6 +49,16 @@ double AJsonHandler::TryGetNumberField(TSharedPtr<FJsonValue>& item, FString fie
 	return out1;
 }
 
+double AJsonHandler::TryGetNumberField_FromObj(TSharedPtr<FJsonObject>& item, FString fieldName, double defIfFailed)
+{
+	double out1;
+	if (!item->TryGetNumberField(fieldName, out1))
+	{
+		out1 = defIfFailed;
+	}
+	return out1;
+}
+
 FString AJsonHandler::TryGetStringField_FromObj(TSharedPtr<FJsonObject>& item, FString fieldName, FString defIfFailed)
 {
 	FString out1;

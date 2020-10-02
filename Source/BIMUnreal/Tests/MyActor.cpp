@@ -12,6 +12,7 @@
 #include "Misc/CString.h"
 #include "Materials/Material.h"
 #include "Materials/MaterialInstance.h"
+#include "../Model/FMaterialContent.h"
 #include "UObject/ConstructorHelpers.h"
 
 #include "HAL/PlatformFilemanager.h"
@@ -154,6 +155,14 @@ void AMyActor::BeginPlay()
 	// [TODO]暂未释放
 	// --------------
 	this->context = AOpenCTMHandler::m_CtmNewContext(CTMenum::CTM_IMPORT);
+
+	// 清空 blockId 与 materialId 的 map
+	// ---------------------------------
+	m_MapBlockMaterial.Empty();
+
+	// 清空 m_MapMaterial 数据
+	// -----------------------
+	m_MapMaterial.Empty();
 
 	// 清掉所有的 MeshSection !
 	// ------------------------
@@ -324,6 +333,10 @@ void AMyActor::OnRequestComplete_AllElementsInView(FHttpRequestPtr Request, FHtt
 						blockMappingItem.transform = AJsonHandler::TryGetStringField(item, FString("transform"), FString(""));
 						blockMappingItem.transform_list = AStringHandler::SplitToDoubleArray(blockMappingItem.transform, TEXT(","));
 
+						// map set
+						// -------
+						m_MapBlockMaterial.Add(blockMappingItem.blockId, blockMappingItem.materialId);
+
 						// blockMappingItems => blockMappingItems_objlist
 						// ----------------------------------------------
 						ele.BlockMapping_obj.blockMappingItems_objlist.Add(blockMappingItem);
@@ -361,26 +374,20 @@ void AMyActor::OnRequestComplete_CacheBlockCount(FHttpRequestPtr Request, FHttpR
 		// 将返回的字符串转为数字，作为获得的 block 的个数
 		// -----------------------------------------------
 		int blockFileCount = FCString::Atoi(*ContentJson);
+		this->m_blockFileCount = blockFileCount;
 
-		// 从1开始，针对每个数字，再调用 https://bimcomposer.probim.cn/api/Model/GetCacheBlock?FileID=1&ProjectID=46d11566-6b7e-47a1-ba5d-12761ab9b55c&ModelID=58080653-18d1-4067-b480-e02c56eb791a&VersionNO=&ViewID=168550
-		// -------------------------------------------------------------------------------------------
-		for (int i = 1; i <= blockFileCount; i++) 
-		{
-			UE_LOG(LogTemp, Warning, TEXT("to call GetCacheBlock?FileID= %d"), i);
+		// 先调用 GetMaterials
+		// -------------------
+		FString urlOfMaterials = AUrlsHandler::GetUrlOfGetMaterials();
+		TSharedRef<IHttpRequest> httpReuestMtr = FHttpModule::Get().CreateRequest();
+		httpReuestMtr->SetVerb(TEXT("GET"));
+		httpReuestMtr->SetHeader(TEXT("Content-Type"), TEXT("APPLICATION/x-www-from-urlencoded"));
+		httpReuestMtr->SetURL(urlOfMaterials);
+		httpReuestMtr->OnProcessRequestComplete().BindUObject(this, &AMyActor::OnRequestComplete_GetMaterials);
+		httpReuestMtr->ProcessRequest();
 
-			// 得到当前的 url 地址
-			// -------------------
 
-			// 请求接口测试2
-			// -------------
-			FString urlOfCacheBlock = AUrlsHandler::GetUrlOfGetCacheBlock(i);
-			TSharedRef<IHttpRequest> httpReuestTemp = FHttpModule::Get().CreateRequest();
-			httpReuestTemp->SetVerb(TEXT("GET"));
-			httpReuestTemp->SetHeader(TEXT("Content-Type"), TEXT("APPLICATION/x-www-from-urlencoded"));
-			httpReuestTemp->SetURL(urlOfCacheBlock);
-			httpReuestTemp->OnProcessRequestComplete().BindUObject(this, &AMyActor::OnRequestComplete_GetCacheBlock);
-			httpReuestTemp->ProcessRequest();
-		}
+		
 	}
 }
 
@@ -408,6 +415,98 @@ void AMyActor::OnRequestComplete_GetCacheBlock(FHttpRequestPtr Request, FHttpRes
 		// 调用方法，解析这个字节数组
 		// --------------------------
 		AMyActor::AnalysisBuffer(buffer, resBuffer.Num());
+	}
+}
+
+void AMyActor::OnRequestComplete_GetMaterials(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bConnectedSuccessfully)
+{
+	if (!Request.IsValid() || !Response.IsValid())
+	{
+		return;
+	}
+
+	if (bConnectedSuccessfully)
+	{
+		FString allMaterials = Response->GetContentAsString();
+
+		// 将 allMaterials 反序列化为实体
+		// ------------------------------
+		TArray<TSharedPtr<FJsonValue>> originParsed;
+		bool BFlag = AJsonHandler::DeserializeList(allMaterials, &originParsed);
+		if (BFlag)
+		{
+			for (size_t i = 0; i < originParsed.Num(); i++)
+			{
+				FMaterial2 mtr;
+				mtr.ID = AJsonHandler::TryGetStringField(originParsed[i], FString("ID"), FString(""));
+				mtr.Content = AJsonHandler::TryGetStringField(originParsed[i], FString("Content"), FString(""));
+
+				TSharedPtr<FJsonObject> JsonObject;
+				bool bIsOk = AJsonHandler::Deserialize(mtr.Content, &JsonObject);
+				if (bIsOk)
+				{
+					mtr.Content_Obj.ang = AJsonHandler::TryGetNumberField_FromObj(JsonObject, FString("ang"), 0.0f);
+					mtr.Content_Obj.appearancecolor = AJsonHandler::TryGetStringField_FromObj(JsonObject, FString("appearancecolor"), FString(""));
+					mtr.Content_Obj.cat = AJsonHandler::TryGetStringField_FromObj(JsonObject, FString("cat"), FString(""));
+					mtr.Content_Obj.color = AJsonHandler::TryGetStringField_FromObj(JsonObject, FString("color"), FString(""));
+					mtr.Content_Obj.Glossness = AJsonHandler::TryGetNumberField_FromObj(JsonObject, FString("Glossness"), 0.0f);
+					mtr.Content_Obj.img = AJsonHandler::TryGetStringField_FromObj(JsonObject, FString("img"), FString(""));
+					mtr.Content_Obj.ismetal = AJsonHandler::TryGetBoolField_FromObj(JsonObject, FString("ismetal"), false);
+					JsonObject->TryGetStringArrayField(FString("othertextures"), mtr.Content_Obj.othertextures);
+					mtr.Content_Obj.ReflectivityDirect = AJsonHandler::TryGetNumberField_FromObj(JsonObject, FString("ReflectivityDirect"), 0.0f);
+					mtr.Content_Obj.ReflectivityOblique = AJsonHandler::TryGetNumberField_FromObj(JsonObject, FString("ReflectivityOblique"), 0.0f);
+					mtr.Content_Obj.rpc = AJsonHandler::TryGetBoolField_FromObj(JsonObject, FString("rpc"), false);
+					mtr.Content_Obj.rpccat = AJsonHandler::TryGetStringField_FromObj(JsonObject, FString("rpccat"), FString(""));
+					mtr.Content_Obj.rpcheight = AJsonHandler::TryGetNumberField_FromObj(JsonObject, FString("rpcheight"), 0.0f);
+					mtr.Content_Obj.rpcid = AJsonHandler::TryGetStringField_FromObj(JsonObject, FString("rpcid"), FString(""));
+					mtr.Content_Obj.rpcreflections = AJsonHandler::TryGetBoolField_FromObj(JsonObject, FString("rpcreflections"), false);
+					mtr.Content_Obj.rpcshadows = AJsonHandler::TryGetBoolField_FromObj(JsonObject, FString("rpcshadows"), false);
+					mtr.Content_Obj.SelfIllumColorTemperature = AJsonHandler::TryGetNumberField_FromObj(JsonObject, FString("SelfIllumColorTemperature"), 0.0f);
+					mtr.Content_Obj.SelfIllumFiltermap = AJsonHandler::TryGetStringField_FromObj(JsonObject, FString("SelfIllumFiltermap"), FString(""));
+					mtr.Content_Obj.SelfIllumLuminance = AJsonHandler::TryGetNumberField_FromObj(JsonObject, FString("SelfIllumLuminance"), 0.0f);
+					mtr.Content_Obj.shi = AJsonHandler::TryGetNumberField_FromObj(JsonObject, FString("shi"), 0);
+					mtr.Content_Obj.tintcolor = AJsonHandler::TryGetStringField_FromObj(JsonObject, FString("tintcolor"), FString(""));
+					mtr.Content_Obj.tinttoggle = AJsonHandler::TryGetBoolField_FromObj(JsonObject, FString("tinttoggle"), false);
+					mtr.Content_Obj.tp = AJsonHandler::TryGetNumberField_FromObj(JsonObject, FString("tp"), 0.0f);
+					mtr.Content_Obj.typ = AJsonHandler::TryGetStringField_FromObj(JsonObject, FString("typ"), FString(""));
+					mtr.Content_Obj.uf = AJsonHandler::TryGetNumberField_FromObj(JsonObject, FString("uf"), 0.0f);
+					mtr.Content_Obj.URepeat = AJsonHandler::TryGetBoolField_FromObj(JsonObject, FString("URepeat"), false);
+					mtr.Content_Obj.usc = AJsonHandler::TryGetNumberField_FromObj(JsonObject, FString("usc"), 0.0f);
+					mtr.Content_Obj.userenderappearance = AJsonHandler::TryGetBoolField_FromObj(JsonObject, FString("userenderappearance"), false);
+					mtr.Content_Obj.uvsc = AJsonHandler::TryGetNumberField_FromObj(JsonObject, FString("uvsc"), 0.0f);
+					mtr.Content_Obj.vf = AJsonHandler::TryGetNumberField_FromObj(JsonObject, FString("vf"), 0.0f);
+					mtr.Content_Obj.VRepeat = AJsonHandler::TryGetBoolField_FromObj(JsonObject, FString("VRepeat"), false);
+					mtr.Content_Obj.vsc = AJsonHandler::TryGetNumberField_FromObj(JsonObject, FString("vsc"), 0.0f);
+				}
+
+				//m_Materials.Add(mtr);
+				m_MapMaterial.Add(mtr.ID, mtr);
+			}
+		}
+
+
+
+
+
+		// 从1开始，针对每个数字，再调用 https://bimcomposer.probim.cn/api/Model/GetCacheBlock?FileID=1&ProjectID=46d11566-6b7e-47a1-ba5d-12761ab9b55c&ModelID=58080653-18d1-4067-b480-e02c56eb791a&VersionNO=&ViewID=168550
+		// -------------------------------------------------------------------------------------------
+		for (int i = 1; i <= m_blockFileCount; i++)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("to call GetCacheBlock?FileID= %d"), i);
+
+			// 得到当前的 url 地址
+			// -------------------
+
+			// 请求接口测试2
+			// -------------
+			FString urlOfCacheBlock = AUrlsHandler::GetUrlOfGetCacheBlock(i);
+			TSharedRef<IHttpRequest> httpReuestTemp = FHttpModule::Get().CreateRequest();
+			httpReuestTemp->SetVerb(TEXT("GET"));
+			httpReuestTemp->SetHeader(TEXT("Content-Type"), TEXT("APPLICATION/x-www-from-urlencoded"));
+			httpReuestTemp->SetURL(urlOfCacheBlock);
+			httpReuestTemp->OnProcessRequestComplete().BindUObject(this, &AMyActor::OnRequestComplete_GetCacheBlock);
+			httpReuestTemp->ProcessRequest();
+		}
 	}
 }
 
@@ -594,7 +693,15 @@ void AMyActor::AnalysisBuffer(BYTE * buffer, int size)
 			// 添加到数组
 			// ----------
 			FMaterialSection * section = new FMaterialSection;
-			//section->m_MaterialInstanceDyn = MaterialInstanceDnm2;
+			section->m_blockId = FString(blockIdBuffer_utf8);
+			if (this->m_MapBlockMaterial.Contains(section->m_blockId))
+			{
+				section->m_MaterialId = this->m_MapBlockMaterial[section->m_blockId];
+			}
+			else
+			{
+				UE_LOG(LogTemp, Error, TEXT("m_MapBlockMaterial doesn't contains m_blockId: %s"), *section->m_blockId);
+			}
 			section->m_ProceduralMeshComp = ProceduralMeshComp;
 			section->Material = this->Material;
 			section->m_MaterialSectionIndex = MaterialSectionArr.Num();
@@ -633,25 +740,60 @@ void AMyActor::AnalysisBuffer(BYTE * buffer, int size)
 	// 这里测试：一共有多少个 Mesh 分片
 	// --------------------------------
 	int sectionNum = MaterialSectionArr.Num(); //ProceduralMeshComp->GetNumSections();
-	UE_LOG(LogTemp, Warning, TEXT("[721:6]MaterialSectionArr's Num is %d"), sectionNum);
+	UE_LOG(LogTemp, Warning, TEXT("[721:7]MaterialSectionArr's Num is %d"), sectionNum);
+
+	// test
+	// ----
+	int mapnum = m_MapBlockMaterial.Num();
+	UE_LOG(LogTemp, Warning, TEXT("map's num is %d"), mapnum);
 
 	// 测试，遍历并赋予 Texture2D
 	// --------------------------
 	for (size_t i = 0; i < sectionNum; i++)
 	{
+		// 从 m_MapMaterial 找到 materialId 对应的数据
+		// -----------------------------------------
+		auto materialId = this->m_MapBlockMaterial[MaterialSectionArr[i]->m_blockId];
+
+		FMaterial2 & mtrObj = m_MapMaterial[materialId];
+		UE_LOG(LogTemp, Warning, TEXT("[759]color is %s"), *(mtrObj.Content_Obj.appearancecolor));
+
 		// Create Mesh Section
 		// CreateMeshSection_LinearColor 推荐使用此方法
 		// --------------------------------------------
 		MaterialSectionArr[i]->m_ProceduralMeshComp->CreateMeshSection_LinearColor(i, MaterialSectionArr[i]->verticesArr, MaterialSectionArr[i]->indicesArr, MaterialSectionArr[i]->normalsArr, MaterialSectionArr[i]->uvsArr, TArray<FLinearColor>(), TArray<FProcMeshTangent>(), false);
 
-		// 设置材质
+		// 指向材质
 		// --------
 		MaterialSectionArr[i]->m_MaterialInstanceDyn = UMaterialInstanceDynamic::Create(this->Material, this, FName(*(FString("MI_Dynamic") + FString::FromInt(i))));
 
-		// MaterialInstanceDnm2->SetVectorParameterValue("AV3", FLinearColor(255 * 1.0f, 0 * 1.0f, 0 * 1.0f, 1));
-		// ------------------------------------------------------------------------------------------------------
-		MaterialSectionArr[i]->m_MaterialInstanceDyn->SetTextureParameterValue("TV5", Texture2D);
+		// 设置材质参数 颜色
+		// -----------------
+		/*	MaterialSectionArr[i]->m_MaterialInstanceDyn->SetVectorParameterValue("AV3", FLinearColor(100.0f, 0,0, 0.2));*/
+
+		// 调用接口，获取贴图
+		// ------------------
+		if (mtrObj.Content_Obj.img != FString(""))
+		{
+			TSharedRef<IHttpRequest> httpReuestimg = FHttpModule::Get().CreateRequest();
+			httpReuestimg->SetVerb(TEXT("GET"));
+			httpReuestimg->SetHeader(TEXT("Content-Type"), TEXT("APPLICATION/x-www-from-urlencoded"));
+			httpReuestimg->SetURL(AUrlsHandler::GetUrlOfGetTextureFile(mtrObj.Content_Obj.img));
+			httpReuestimg->OnProcessRequestComplete().BindRaw(MaterialSectionArr[i], &FMaterialSection::setTextureFromLoadImg2);
+			httpReuestimg->ProcessRequest();
+
+			// 设置材质参数 贴图
+			// -----------------
+			//if (tmpTexture)//MaterialSectionArr[i]->Texture2D)
+			//{
+			//	MaterialSectionArr[i]->m_MaterialInstanceDyn->SetTextureParameterValue("TV5", tmpTexture);// MaterialSectionArr[i]->Texture2D);
+			//}
+		}
+
+		// 设置材质到 Mesh 组件
+		// --------------------
 		MaterialSectionArr[i]->m_ProceduralMeshComp->SetMaterial(MaterialSectionArr[i]->m_MaterialSectionIndex, MaterialSectionArr[i]->m_MaterialInstanceDyn);
+		
 	}
 
 	// 测试

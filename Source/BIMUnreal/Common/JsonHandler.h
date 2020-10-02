@@ -38,6 +38,8 @@ public:
 	// ------------------
 	static double TryGetNumberField(TSharedPtr<FJsonValue>& item, FString fieldName, double defIfFailed);
 
+	static double TryGetNumberField_FromObj(TSharedPtr<FJsonObject>& item, FString fieldName, double defIfFailed);
+
 	// 尝试获取 String 字段(单对象版本)
 	// --------------------------------
 	static FString TryGetStringField_FromObj(TSharedPtr<FJsonObject> & item, FString fieldName, FString defIfFailed);

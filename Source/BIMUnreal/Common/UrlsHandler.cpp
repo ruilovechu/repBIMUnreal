@@ -51,3 +51,16 @@ FString AUrlsHandler::GetUrlOfGetCacheBlock(int FileID)
 	FString ret = AConfigHandler::GetModelApiUrl() + FString("/api/Model/GetCacheBlock?FileID=") + FString::FromInt(FileID) + FString("&ProjectID=") + m_ProjectID + FString("&ModelID=") + m_ModelID + FString("&VersionNO=&ViewID=") + m_ViewID;
 	return ret;
 }
+
+FString AUrlsHandler::GetUrlOfGetMaterials()
+{
+	FString ret = AConfigHandler::GetModelApiUrl() + FString("/api/Model/GetMaterials?ProjectID=") + m_ProjectID + FString("&ModelID=") + m_ModelID + FString("&VersionNO=");
+	return ret;
+}
+
+FString AUrlsHandler::GetUrlOfGetTextureFile(FString filenameziped)
+{
+	// https://bimcomposer.probim.cn/api/Model/GetFile?ProjectID=46d11566-6b7e-47a1-ba5d-12761ab9b55c&ModelID=67170069-1711-4f4c-8ee0-a715325942a1&VersionNO=&FileType=Texture&FileName=brickldnonlduniformldrunningldredppng
+	FString ret = AConfigHandler::GetModelApiUrl() + FString("/api/Model/GetFile?ProjectID=") + m_ProjectID + FString("&ModelID=") + m_ModelID + FString("&VersionNO=&FileType=Texture&FileName=") + filenameziped;
+	return ret;
+}

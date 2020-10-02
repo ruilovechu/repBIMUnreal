@@ -12,6 +12,7 @@
 #include "Engine/Texture2D.h"
 #include "Containers/Queue.h"
 #include "../Model/FMaterialSection.h"
+#include "../Model/FMaterial.h"
 #include "../Common/OpenCTMHandler.h"
 #include "MyActor.generated.h"
 
@@ -36,7 +37,15 @@ public:
 	UTexture2D * Texture2D;
 
 	// meshIndex
+	// ---------
 	int m_meshIndex;
+
+	int m_blockFileCount;
+
+	TMap<FString, FString> m_MapBlockMaterial;
+
+	//TArray<FMaterial2> m_Materials;
+	TMap<FString, FMaterial2> m_MapMaterial;
 
 	// ≤ƒ÷ ÷¥––∑÷∆¨
 	// ------------
@@ -64,6 +73,7 @@ protected:
 	void OnRequestComplete_AllElementsInView(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bConnectedSuccessfully);
 	void OnRequestComplete_CacheBlockCount(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bConnectedSuccessfully);
 	void OnRequestComplete_GetCacheBlock(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bConnectedSuccessfully);
+	void OnRequestComplete_GetMaterials(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bConnectedSuccessfully);
 
 public:	
 	// Called every frame

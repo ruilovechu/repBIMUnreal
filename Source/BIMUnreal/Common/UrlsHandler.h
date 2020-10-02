@@ -44,4 +44,14 @@ public:
 	// ------------------------------------
 	static FString GetUrlOfGetCacheBlock(int FileID);
 
+	// get api url like this:
+	// https://bimcomposer.probim.cn/api/Model/GetMaterials?ProjectID=46d11566-6b7e-47a1-ba5d-12761ab9b55c&ModelID=67170069-1711-4f4c-8ee0-a715325942a1&VersionNO=
+	// ----------------------
+	static FString GetUrlOfGetMaterials();
+
+	// get api url like this:
+	// https://bimcomposer.probim.cn/api/Model/GetFile?ProjectID=46d11566-6b7e-47a1-ba5d-12761ab9b55c&ModelID=67170069-1711-4f4c-8ee0-a715325942a1&VersionNO=&FileType=Texture&FileName=brickldnonlduniformldrunningldredppng
+	// ----------------------
+	static FString GetUrlOfGetTextureFile(FString filenameziped);
+
 };
