@@ -9,6 +9,7 @@
 #include "Materials/Material.h"
 #include "Materials/MaterialInstance.h"
 #include "Materials/MaterialInstanceDynamic.h"
+#include "Engine/Texture2D.h"
 #include "MyActor.generated.h"
 
 UCLASS()
@@ -28,6 +29,9 @@ public:
 	UPROPERTY(VisibleAnywhere, Category = ProcMesh)
 	UMaterial* Material;
 
+	UPROPERTY(VisibleAnywhere, Category = ProcMesh)
+	UTexture2D * Texture2D;
+
 	/*UPROPERTY(VisibleAnywhere, Category = ProcMesh)
 	UMaterialInstance * MaterialInstance;
 
@@ -35,6 +39,7 @@ public:
 	UMaterialInstanceDynamic * MaterialInstanceDnm;*/
 
 protected:
+	void setTextureFromLoadImg(FHttpRequestPtr _request, FHttpResponsePtr _response, bool bWasSuccessful);
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
 

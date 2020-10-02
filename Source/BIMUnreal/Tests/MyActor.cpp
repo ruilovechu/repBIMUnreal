@@ -15,9 +15,111 @@
 #include "Materials/MaterialInstance.h"
 #include "UObject/ConstructorHelpers.h"
 
+#include "HAL/PlatformFilemanager.h"
+#include "Misc/FileHelper.h"
+#include "IImageWrapper.h"
+#include "Modules/ModuleManager.h"
+#include "IImageWrapperModule.h"
+
+#include "Engine/Texture2DDynamic.h"
+#include "Engine/Engine.h"
+
 #define VERTEX_3		3
 #define INDICATE_3		3
 #define VERTEX_UV_2		2
+
+// 路径转为 UTexture2D
+// -------------------
+void AMyActor::setTextureFromLoadImg(FHttpRequestPtr _request, FHttpResponsePtr _response, bool bWasSuccessful)
+{
+	if (!bWasSuccessful && !_response.IsValid())
+	{
+		UE_LOG(LogTemp, Warning, TEXT(" !bWasSuccessful && !_response.IsValid() "));
+		return;
+	}
+
+	IImageWrapperModule& temp_img_module = FModuleManager::LoadModuleChecked<IImageWrapperModule>(FName("ImageWrapper"));
+	IImageWrapperPtr temp_imgWrapper = temp_img_module.CreateImageWrapper(EImageFormat::JPEG);//JPG 或 png 等
+
+	TArray<uint8> temp_fileData = _response->GetContent();
+
+
+	if (!temp_imgWrapper.IsValid() ||
+		!temp_imgWrapper->SetCompressed(temp_fileData.GetData(), temp_fileData.Num()))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("ImageWrapper can‘t Set Compressed or ImageWrapper is InValid"));
+		return;
+	}
+
+	const TArray<uint8>* temp_unCompressedRGBA = NULL;
+
+	if (!temp_imgWrapper->GetRaw(ERGBFormat::RGBA, 8, temp_unCompressedRGBA))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("can‘t get Raw temp_unCompressedRGBA"));
+		return;
+	}
+
+	Texture2D = UTexture2D::CreateTransient(temp_imgWrapper->GetWidth(), temp_imgWrapper->GetHeight());
+
+	auto temp_dataPtr = static_cast<uint8*>(Texture2D->PlatformData->Mips[0].BulkData.Lock(LOCK_READ_WRITE));
+
+	FColor temp_color;
+	uint8 temp_colorPoint;
+	TArray<FColor> temp_arr_color;
+	for (int i = 0; i < temp_unCompressedRGBA->Num(); i++)
+	{
+		temp_colorPoint = (*temp_unCompressedRGBA)[i];
+		temp_color.R = temp_colorPoint;
+		i++;
+		temp_colorPoint = (*temp_unCompressedRGBA)[i];
+		temp_color.G = temp_colorPoint;
+		i++;
+		temp_colorPoint = (*temp_unCompressedRGBA)[i];
+		temp_color.B = temp_colorPoint;
+		i++;
+		temp_colorPoint = (*temp_unCompressedRGBA)[i];
+		temp_color.A = temp_colorPoint;
+		temp_arr_color.Add(temp_color);
+	}
+
+	uint8* DestPtr = NULL;
+	const FColor* SrcPtr = NULL;
+	for (int32 y = 0; y < temp_imgWrapper->GetHeight(); y++)
+	{
+		DestPtr = &temp_dataPtr[(temp_imgWrapper->GetHeight() - 1 - y) * temp_imgWrapper->GetWidth() * sizeof(FColor)];
+		SrcPtr = const_cast<FColor*>(&temp_arr_color[(temp_imgWrapper->GetHeight() - 1 - y) * temp_imgWrapper->GetWidth()]);
+		for (int32 x = 0; x < temp_imgWrapper->GetWidth(); x++)
+		{
+			*DestPtr++ = SrcPtr->R;
+			*DestPtr++ = SrcPtr->G;
+			*DestPtr++ = SrcPtr->B;
+			if (true)
+			{
+				*DestPtr++ = SrcPtr->A;
+			}
+			else
+			{
+				*DestPtr++ = 0xFF;
+			}
+			SrcPtr++;
+		}
+	}
+
+	Texture2D->PlatformData->Mips[0].BulkData.Unlock();
+
+	//Texture2D->UpdateResourceW();
+	Texture2D->UpdateResource();
+
+	//// 请求接口测试2
+	//// -------------
+	//FString urlOfCacheBlockCnt = AUrlsHandler::GetUrlOfGetBlockCacheCount();
+	//TSharedRef<IHttpRequest> httpReuest2 = FHttpModule::Get().CreateRequest();
+	//httpReuest2->SetVerb(TEXT("GET"));
+	//httpReuest2->SetHeader(TEXT("Content-Type"), TEXT("APPLICATION/x-www-from-urlencoded"));
+	//httpReuest2->SetURL(urlOfCacheBlockCnt);
+	//httpReuest2->OnProcessRequestComplete().BindUObject(this, &AMyActor::OnRequestComplete_CacheBlockCount);
+	//httpReuest2->ProcessRequest();
+}
 
 // Sets default values
 AMyActor::AMyActor()
@@ -31,9 +133,18 @@ AMyActor::AMyActor()
 	static ConstructorHelpers::FObjectFinder<UMaterial> MaterialOb(TEXT("Material'/Game/Materials/MTR_T1.MTR_T1'"));
 	Material = MaterialOb.Object;
 
+	//Texture2D'/Engine/EngineMaterials/DefaultBokeh.DefaultBokeh'
+	static ConstructorHelpers::FObjectFinder<UTexture2D> Texture2DOb(TEXT("Texture2D'/Engine/EngineMaterials/DefaultDiffuse.DefaultDiffuse'"));
+	Texture2D = Texture2DOb.Object;
+
+
+	//Texture2D
+
 	/*static ConstructorHelpers::FObjectFinder<UMaterialInstance> MaterialInsOb(TEXT("MaterialInstanceConstant'/Game/MaterialInstances/MTR_T1_Inst.MTR_T1_Inst'"));
 	MaterialInstance = MaterialInsOb.Object;*/
 }
+
+
 
 // Called when the game starts or when spawned
 void AMyActor::BeginPlay()
@@ -66,6 +177,8 @@ void AMyActor::BeginPlay()
 	httpReuest->OnProcessRequestComplete().BindUObject(this, &AMyActor::OnRequestComplete_AllElementsInView);
 	httpReuest->ProcessRequest();
 
+
+
 	// 请求接口测试2
 	// -------------
 	FString urlOfCacheBlockCnt = AUrlsHandler::GetUrlOfGetBlockCacheCount();
@@ -75,6 +188,15 @@ void AMyActor::BeginPlay()
 	httpReuest2->SetURL(urlOfCacheBlockCnt);
 	httpReuest2->OnProcessRequestComplete().BindUObject(this, &AMyActor::OnRequestComplete_CacheBlockCount);
 	httpReuest2->ProcessRequest();
+
+	// 先调用外面的接口获取 UTexture2D 数据？
+	// -------------------------------------
+	TSharedRef<IHttpRequest> httpReuestimg = FHttpModule::Get().CreateRequest();
+	httpReuestimg->SetVerb(TEXT("GET"));
+	httpReuestimg->SetHeader(TEXT("Content-Type"), TEXT("APPLICATION/x-www-from-urlencoded"));
+	httpReuestimg->SetURL(FString("https://bimcomposer.probim.cn/api/Model/GetFile?ProjectID=46d11566-6b7e-47a1-ba5d-12761ab9b55c&ModelID=67170069-1711-4f4c-8ee0-a715325942a1&VersionNO=&FileType=Texture&FileName=brickldnonlduniformldrunningldgrayppng"));
+	httpReuestimg->OnProcessRequestComplete().BindUObject(this, &AMyActor::setTextureFromLoadImg);
+	httpReuestimg->ProcessRequest();
 
 	// json 操作测试
 	// -------------
@@ -349,6 +471,8 @@ void AMyActor::AnalysisBuffer(BYTE * buffer, int size)
 		// ---------------------------
 		UE_LOG(LogTemp, Warning, TEXT("blockIdLength = %d"), blockIdLength);
 
+		
+
 		// 声明 blockIdLength 个字节的 BYTE，用于存储 blockId 的值
 		// -------------------------------------------------------
 		BYTE * blockIdBuffer = (BYTE*)calloc(blockIdLength, sizeof(BYTE));
@@ -359,6 +483,11 @@ void AMyActor::AnalysisBuffer(BYTE * buffer, int size)
 		memcpy(blockIdBuffer, buffer + offset, blockIdLength);
 		TCHAR* blockIdBuffer_utf8 = UTF8_TO_TCHAR(blockIdBuffer);
 		offset += blockIdLength;
+
+		if (strcmp("211665_499261", (char *)blockIdBuffer_utf8) == 0)
+		{
+			UE_LOG(LogTemp, Error, TEXT("CONTAINS!"));
+		}
 
 		// 调试输出 blockIdBuffer_utf8 的值
 		// ---------------------------
@@ -425,6 +554,7 @@ void AMyActor::AnalysisBuffer(BYTE * buffer, int size)
 				//UE4中是模型是以厘米为单位
 				// ------------------------
 				verticesArr.Add(FVector(vertices[i] * 100, vertices[i + 1] * 100, vertices[i + 2] * 100));
+				//verticesArr.Add(FVector(vertices[i] * 10, vertices[i + 1] * 10, vertices[i + 2] * 10));
 
 				linearArr.Add(FLinearColor(255.0f, 0, 0, 0.8));
 			}
@@ -445,6 +575,7 @@ void AMyActor::AnalysisBuffer(BYTE * buffer, int size)
 				// 以厘米为单位
 				// ------------
 				uvsArr.Add(FVector2D(uvs[i] * 100, uvs[i + 1] * 100));
+				//uvsArr.Add(FVector2D(uvs[i] * 1, uvs[i + 1] * 1));
 			}
 
 			// *获取法线数组(vertex_comp_cnt 与顶点（分量）个数相同)
@@ -473,9 +604,14 @@ void AMyActor::AnalysisBuffer(BYTE * buffer, int size)
 			auto MaterialInstanceDnm2 = UMaterialInstanceDynamic::Create(this->Material, this, FName(*(FString("MI_Dynamic") + FString::FromInt(index))));
 			if (MaterialInstanceDnm2)
 			{
-				int randomI = FMath::RandHelper(255);
-				UE_LOG(LogTemp, Warning, TEXT("randomI = %d"), randomI);
-				if (index % 3 == 1)
+				// 生成随机数
+				// ----------
+				/*int randomI = FMath::RandHelper(255);
+				UE_LOG(LogTemp, Warning, TEXT("randomI = %d"), randomI);*/
+
+				// 通过参数 AV3 赋予不同值
+				// -----------------------
+			/*	if (index % 3 == 1)
 				{
 					MaterialInstanceDnm2->SetVectorParameterValue("AV3", FLinearColor(255 * 1.0f, 0 * 1.0f, 0 * 1.0f, 1));
 				}
@@ -486,7 +622,22 @@ void AMyActor::AnalysisBuffer(BYTE * buffer, int size)
 				else
 				{
 					MaterialInstanceDnm2->SetVectorParameterValue("AV3", FLinearColor(0 * 1.0f, 0 * 1.0f, 255 * 1.0f, 1));
+				}*/
+				
+				
+				// 将 贴图赋予该 材质
+				// ------------------
+				if (Texture2D)
+				{
+					MaterialInstanceDnm2->SetTextureParameterValue("TV5", Texture2D);
 				}
+				else
+				{
+					UE_LOG(LogTemp, Error, TEXT("Texture2D is NULL"));
+				}
+
+				// 将材质赋予该 mesh 分片
+				// ----------------------
 				ProceduralMeshComp->SetMaterial(index, MaterialInstanceDnm2);
 			}
 			else
