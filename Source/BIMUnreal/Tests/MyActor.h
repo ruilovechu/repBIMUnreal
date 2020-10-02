@@ -10,6 +10,9 @@
 #include "Materials/MaterialInstance.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Engine/Texture2D.h"
+#include "Containers/Queue.h"
+#include "../Model/FMaterialSection.h"
+#include "../Common/OpenCTMHandler.h"
 #include "MyActor.generated.h"
 
 UCLASS()
@@ -32,6 +35,14 @@ public:
 	UPROPERTY(VisibleAnywhere, Category = ProcMesh)
 	UTexture2D * Texture2D;
 
+	// meshIndex
+	int m_meshIndex;
+
+	// 材质执行分片
+	// ------------
+	//TQueue<FMaterialSection *> MaterialSectionQueue;
+	TArray<FMaterialSection *> MaterialSectionArr;
+
 	/*UPROPERTY(VisibleAnywhere, Category = ProcMesh)
 	UMaterialInstance * MaterialInstance;
 
@@ -39,6 +50,11 @@ public:
 	UMaterialInstanceDynamic * MaterialInstanceDnm;*/
 
 protected:
+
+	// CTM 上下文句柄
+	// --------------
+	CTMcontext context;
+
 	void setTextureFromLoadImg(FHttpRequestPtr _request, FHttpResponsePtr _response, bool bWasSuccessful);
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
@@ -51,7 +67,7 @@ protected:
 
 public:	
 	// Called every frame
-	//virtual void Tick(float DeltaTime) override;
+	virtual void Tick(float DeltaTime) override;
 
 	// 解析 block buffer
 	// -----------------

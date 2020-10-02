@@ -4,7 +4,6 @@
 #include "MyActor.h"
 
 #include "../Common/JsonHandler.h"
-#include "../Common/OpenCTMHandler.h"
 #include "../Common/UrlsHandler.h"
 #include "../Model/FElement.h"
 #include "../Common/StringHandler.h"
@@ -151,19 +150,18 @@ void AMyActor::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// openCTM dll 引入测试
-	// --------------------
-	if (AOpenCTMHandler::m_CtmAddUVMap && AOpenCTMHandler::m_CtmCompressionLevel)
-	{
-		//UE_LOG(LogTemp, Warning, TEXT("all are not null 1543"));
-	}
-	else
-	{
-		UE_LOG(LogTemp, Error, TEXT("some is nulla"));
-	}
+	// 初始化 CTM 的 content 句柄
+	// [TODO]暂未释放
+	// --------------
+	this->context = AOpenCTMHandler::m_CtmNewContext(CTMenum::CTM_IMPORT);
+
+	// 清掉所有的 MeshSection !
+	// ------------------------
+	ProceduralMeshComp->ClearAllMeshSections();
 
 	// 地址拼接测试
 	// ------------
+	// https://bimcomposer.probim.cn/api/Model/GetAllElementsInView?ProjectID=7d96928d-5add-45cb-a139-2c787141e50d&ModelID=9f49078c-180e-4dc5-b696-5a50a9e09016&VersionNO=&ViewID=142554
 	AUrlsHandler::InitParameters(FString("46d11566-6b7e-47a1-ba5d-12761ab9b55c"), FString("67170069-1711-4f4c-8ee0-a715325942a1"), FString("69323"));
 	FString allEleurls = AUrlsHandler::GetUrlOfGetAllElements();
 	UE_LOG(LogTemp, Error, TEXT("allEleurls == %s"), *allEleurls);
@@ -191,12 +189,12 @@ void AMyActor::BeginPlay()
 
 	// 先调用外面的接口获取 UTexture2D 数据？
 	// -------------------------------------
-	TSharedRef<IHttpRequest> httpReuestimg = FHttpModule::Get().CreateRequest();
-	httpReuestimg->SetVerb(TEXT("GET"));
-	httpReuestimg->SetHeader(TEXT("Content-Type"), TEXT("APPLICATION/x-www-from-urlencoded"));
-	httpReuestimg->SetURL(FString("https://bimcomposer.probim.cn/api/Model/GetFile?ProjectID=46d11566-6b7e-47a1-ba5d-12761ab9b55c&ModelID=67170069-1711-4f4c-8ee0-a715325942a1&VersionNO=&FileType=Texture&FileName=brickldnonlduniformldrunningldgrayppng"));
-	httpReuestimg->OnProcessRequestComplete().BindUObject(this, &AMyActor::setTextureFromLoadImg);
-	httpReuestimg->ProcessRequest();
+	//TSharedRef<IHttpRequest> httpReuestimg = FHttpModule::Get().CreateRequest();
+	//httpReuestimg->SetVerb(TEXT("GET"));
+	//httpReuestimg->SetHeader(TEXT("Content-Type"), TEXT("APPLICATION/x-www-from-urlencoded"));
+	//httpReuestimg->SetURL(FString("https://bimcomposer.probim.cn/api/Model/GetFile?ProjectID=46d11566-6b7e-47a1-ba5d-12761ab9b55c&ModelID=67170069-1711-4f4c-8ee0-a715325942a1&VersionNO=&FileType=Texture&FileName=brickldnonlduniformldrunningldgrayppng"));
+	//httpReuestimg->OnProcessRequestComplete().BindUObject(this, &AMyActor::setTextureFromLoadImg);
+	//httpReuestimg->ProcessRequest();
 
 	// json 操作测试
 	// -------------
@@ -413,6 +411,38 @@ void AMyActor::OnRequestComplete_GetCacheBlock(FHttpRequestPtr Request, FHttpRes
 	}
 }
 
+void AMyActor::Tick(float DeltaTime)
+{
+	Super::Tick(DeltaTime);
+
+	//FMaterialSection * section;
+	//bool bDequeueSuc = this->MaterialSectionQueue.Dequeue(section);
+	//if (bDequeueSuc)
+	//{
+	//	UE_LOG(LogTemp, Warning, TEXT("Dequeue suc!"));
+
+	//	// 将 贴图赋予该 材质
+	//	// ------------------
+	//	if (section->Texture2D)
+	//	{
+	//		//133 7167 3776
+	//		section->m_MaterialInstanceDyn->SetTextureParameterValue("TV5", section->Texture2D);
+	//	}
+	//	else
+	//	{
+	//		UE_LOG(LogTemp, Error, TEXT("Texture2D is NULL"));
+	//	}
+
+	//	// 将材质赋予该 mesh 分片
+	//	// ----------------------
+	//	section->m_ProceduralMeshComp->SetMaterial(section->m_MaterialSectionIndex, section->m_MaterialInstanceDyn);
+	//}
+	//else
+	//{
+	//	UE_LOG(LogTemp, Warning, TEXT("Dequeue no data!"));
+	//}
+}
+
 // ctmLoadCustom 回调
 // ------------------
 CTMuint CTMRreadfn(void* aBuf, CTMuint aCount, void* aUserData)
@@ -439,20 +469,13 @@ void AMyActor::AnalysisBuffer(BYTE * buffer, int size)
 {
 	int offset = 0;
 
-	static int meshIndex = 0;
+	int blockloaded = 0;
 
 	// 由于返回的数据可能不止含有一段 |B365|
 	// 这里用循环来取多个 blockBuffer
 	// ------------------------------
-	int looptimes = 0;
 	while (offset < size)
 	{
-		// 输出循环次数
-		// ------------
-		UE_LOG(LogTemp, Warning, TEXT("looptimes : %d"), looptimes);
-
-		looptimes++;
-
 		// 首先要跳过 |B365|
 		// -----------------
 		offset += strlen("|B365|");
@@ -467,12 +490,6 @@ void AMyActor::AnalysisBuffer(BYTE * buffer, int size)
 		memcpy(&blockIdLength, buffer + offset, sizeof(int));
 		offset += sizeof(int);
 
-		// 调试输出 blockIdLength 的值
-		// ---------------------------
-		UE_LOG(LogTemp, Warning, TEXT("blockIdLength = %d"), blockIdLength);
-
-		
-
 		// 声明 blockIdLength 个字节的 BYTE，用于存储 blockId 的值
 		// -------------------------------------------------------
 		BYTE * blockIdBuffer = (BYTE*)calloc(blockIdLength, sizeof(BYTE));
@@ -484,28 +501,17 @@ void AMyActor::AnalysisBuffer(BYTE * buffer, int size)
 		TCHAR* blockIdBuffer_utf8 = UTF8_TO_TCHAR(blockIdBuffer);
 		offset += blockIdLength;
 
-		if (strcmp("211665_499261", (char *)blockIdBuffer_utf8) == 0)
-		{
-			UE_LOG(LogTemp, Error, TEXT("CONTAINS!"));
-		}
-
-		// 调试输出 blockIdBuffer_utf8 的值
-		// ---------------------------
-		UE_LOG(LogTemp, Warning, TEXT("blockIdBuffer_utf8 = %s"), blockIdBuffer_utf8);
-
 		// 接下来应该是 |ID GEO| 这个字符串，拷贝输出验证
 		// ----------------------------------------------
 		TCHAR ch[9] = { 0 };
 		memcpy(ch, buffer + offset, 8);
 		TCHAR * ch_uft8 = UTF8_TO_TCHAR(ch);
-		UE_LOG(LogTemp, Warning, TEXT("ch_uft8 = %s"), ch_uft8);
 		offset += strlen("|ID GEO|");
 
 		// 再读4个字节，拿到contentLength
 		// ------------------------------
 		int contentLength;
 		memcpy(&contentLength, buffer + offset, sizeof(int));
-		UE_LOG(LogTemp, Warning, TEXT("contentLength = %d"), contentLength);
 		offset += 4;
 
 		// 先读 contentLength 个字节，读完后再偏移contentLength 个字节，进入下一个循环
@@ -513,26 +519,18 @@ void AMyActor::AnalysisBuffer(BYTE * buffer, int size)
 		BYTE * contentBuffer = (BYTE*)calloc(contentLength, sizeof(BYTE));
 		memcpy(contentBuffer, buffer + offset, contentLength);
 		offset += contentLength;
-
-		// openCTM 解析测试
-		// ----------------
-		CTMcontext context = AOpenCTMHandler::m_CtmNewContext(CTMenum::CTM_IMPORT);
-		if (context)
+		
+		if (this->context)
 		{
 			// 调用 openCTM 的 LoadCustom
 			// --------------------------
-			AOpenCTMHandler::m_CtmLoadCustom(context, CTMRreadfn, contentBuffer);
+			AOpenCTMHandler::m_CtmLoadCustom(this->context, CTMRreadfn, contentBuffer);
 
 			// 调用各 api 获取数据
 			// -------------------
-			int vertex_comp_cnt = AOpenCTMHandler::m_CtmGetInteger(context, CTMenum::CTM_VERTEX_COUNT) * VERTEX_3;
-			UE_LOG(LogTemp, Warning, TEXT("vertex_comp_cnt = %d"), vertex_comp_cnt);
-
-			int indicate_comp_cnt = AOpenCTMHandler::m_CtmGetInteger(context, CTMenum::CTM_TRIANGLE_COUNT) * INDICATE_3; // 索引个数
-			UE_LOG(LogTemp, Warning, TEXT("indicate_comp_cnt = %d"), indicate_comp_cnt);
-
-			int uv_comp_cnt = AOpenCTMHandler::m_CtmGetInteger(context, CTMenum::CTM_VERTEX_COUNT) * VERTEX_UV_2;
-			UE_LOG(LogTemp, Warning, TEXT("uv_comp_cnt = %d"), uv_comp_cnt);
+			int vertex_comp_cnt = AOpenCTMHandler::m_CtmGetInteger(this->context, CTMenum::CTM_VERTEX_COUNT) * VERTEX_3;
+			int indicate_comp_cnt = AOpenCTMHandler::m_CtmGetInteger(this->context, CTMenum::CTM_TRIANGLE_COUNT) * INDICATE_3; // 索引个数
+			int uv_comp_cnt = AOpenCTMHandler::m_CtmGetInteger(this->context, CTMenum::CTM_VERTEX_COUNT) * VERTEX_UV_2;
 
 			// 获取数据
 			// 顶点数组
@@ -544,24 +542,23 @@ void AMyActor::AnalysisBuffer(BYTE * buffer, int size)
 			TArray<FVector> normalsArr;
 			TArray<int32> indicesArr;
 			TArray<FVector2D> uvsArr;
-			TArray<FLinearColor> linearArr;
+			//TArray<FLinearColor> linearArr;
 
 			// 获取顶点数组
 			// ------------
-			const CTMfloat * vertices = AOpenCTMHandler::m_CtmGetFloatArray(context, CTMenum::CTM_VERTICES);
+			const CTMfloat * vertices = AOpenCTMHandler::m_CtmGetFloatArray(this->context, CTMenum::CTM_VERTICES);
 			for (size_t i = 0; i < vertex_comp_cnt; i += VERTEX_3)
 			{
 				//UE4中是模型是以厘米为单位
-				// ------------------------
-				verticesArr.Add(FVector(vertices[i] * 100, vertices[i + 1] * 100, vertices[i + 2] * 100));
 				//verticesArr.Add(FVector(vertices[i] * 10, vertices[i + 1] * 10, vertices[i + 2] * 10));
-
-				linearArr.Add(FLinearColor(255.0f, 0, 0, 0.8));
+				//linearArr.Add(FLinearColor(255.0f, 0, 0, 0.8));
+				// ----------------------------------------------
+				verticesArr.Add(FVector(vertices[i] * 100, vertices[i + 1] * 100 * -1, vertices[i + 2] * 100));
 			}
 
 			// 获取索引数组
 			// ------------
-			const CTMuint * indicates = AOpenCTMHandler::m_CtmGetIntegerArray(context, CTMenum::CTM_INDICES);
+			const CTMuint * indicates = AOpenCTMHandler::m_CtmGetIntegerArray(this->context, CTMenum::CTM_INDICES);
 			for (size_t i = 0; i < indicate_comp_cnt; i++)
 			{
 				indicesArr.Add(indicates[i]);
@@ -569,116 +566,48 @@ void AMyActor::AnalysisBuffer(BYTE * buffer, int size)
 
 			// 获取uv数组
 			// ----------
-			const CTMfloat * uvs = AOpenCTMHandler::m_CtmGetFloatArray(context, CTMenum::CTM_UV_MAP_1);
-			for (size_t i = 0; i < uv_comp_cnt; i+= VERTEX_UV_2)
+			const CTMfloat * uvs = AOpenCTMHandler::m_CtmGetFloatArray(this->context, CTMenum::CTM_UV_MAP_1);
+			if (uvs)
 			{
-				// 以厘米为单位
-				// ------------
-				uvsArr.Add(FVector2D(uvs[i] * 100, uvs[i + 1] * 100));
-				//uvsArr.Add(FVector2D(uvs[i] * 1, uvs[i + 1] * 1));
+				for (size_t i = 0; i < uv_comp_cnt; i += VERTEX_UV_2)
+				{
+					// 以厘米为单位
+					// ------------
+					uvsArr.Add(FVector2D(uvs[i] * 100, uvs[i + 1] * 100));
+					//uvsArr.Add(FVector2D(uvs[i] * 1, uvs[i + 1] * 1));
+				}
 			}
 
 			// *获取法线数组(vertex_comp_cnt 与顶点（分量）个数相同)
 			// 这部分可以不填，但会影响光照。当你必须要计算反光效果时候，这些参数必须计算。顶点的法线一般可以理解为：在该点所在的三角面上由该点与另外的两个点组成的两个向量的叉乘（一般向量方向由右手法则来确定），叉乘结果再归一化。
 			// 法线数组，数组的大小等于网格顶点坐标的数量
 			// -----------------------------------------------------
-			const CTMfloat * normals = AOpenCTMHandler::m_CtmGetFloatArray(context, CTMenum::CTM_NORMALS);
-			for (size_t i = 0; i < vertex_comp_cnt; i+= VERTEX_3)
+			const CTMfloat * normals = AOpenCTMHandler::m_CtmGetFloatArray(this->context, CTMenum::CTM_NORMALS);
+			if (normals)
 			{
-				normalsArr.Add(FVector(normals[i], normals[i + 1], normals[i + 2]));
+				for (size_t i = 0; i < vertex_comp_cnt; i += VERTEX_3)
+				{
+					normalsArr.Add(FVector(normals[i], normals[i + 1], normals[i + 2]));
+				}
 			}
 
-			// 测试输出
-			// --------
-			UE_LOG(LogTemp, Warning, TEXT("verticesArr's len: %d, normalArr's len: %d, indicesArr's len: %d, uvs's len: %d"), verticesArr.Num(), normalsArr.Num(), indicesArr.Num(), uvsArr.Num());
-
-			// Create Mesh Section
-			// -------------------
-			// CreateMeshSection_LinearColor 推荐使用此方法
-			int index = meshIndex;
-			meshIndex++;
-			ProceduralMeshComp->CreateMeshSection_LinearColor(index, verticesArr, indicesArr, normalsArr, uvsArr, linearArr, TArray<FProcMeshTangent>(), false);
-
-			// 设置材质
-			// --------
-			auto MaterialInstanceDnm2 = UMaterialInstanceDynamic::Create(this->Material, this, FName(*(FString("MI_Dynamic") + FString::FromInt(index))));
-			if (MaterialInstanceDnm2)
-			{
-				// 生成随机数
-				// ----------
-				/*int randomI = FMath::RandHelper(255);
-				UE_LOG(LogTemp, Warning, TEXT("randomI = %d"), randomI);*/
-
-				// 通过参数 AV3 赋予不同值
-				// -----------------------
-			/*	if (index % 3 == 1)
-				{
-					MaterialInstanceDnm2->SetVectorParameterValue("AV3", FLinearColor(255 * 1.0f, 0 * 1.0f, 0 * 1.0f, 1));
-				}
-				else if (index % 3 == 2)
-				{
-					MaterialInstanceDnm2->SetVectorParameterValue("AV3", FLinearColor(0 * 1.0f, 255 * 1.0f, 0 * 1.0f, 1));
-				}
-				else
-				{
-					MaterialInstanceDnm2->SetVectorParameterValue("AV3", FLinearColor(0 * 1.0f, 0 * 1.0f, 255 * 1.0f, 1));
-				}*/
-				
-				//// 先调用外面的接口获取 UTexture2D 数据？
-				//// -------------------------------------
-				//TSharedRef<IHttpRequest> httpReuestimg = FHttpModule::Get().CreateRequest();
-				//httpReuestimg->SetVerb(TEXT("GET"));
-				//httpReuestimg->SetHeader(TEXT("Content-Type"), TEXT("APPLICATION/x-www-from-urlencoded"));
-				//httpReuestimg->SetURL(FString("https://bimcomposer.probim.cn/api/Model/GetFile?ProjectID=46d11566-6b7e-47a1-ba5d-12761ab9b55c&ModelID=67170069-1711-4f4c-8ee0-a715325942a1&VersionNO=&FileType=Texture&FileName=brickldnonlduniformldrunningldgrayppng"));
-				//httpReuestimg->OnProcessRequestComplete().BindUObject(this, &AMyActor::setTextureFromLoadImg);
-				//httpReuestimg->ProcessRequest();
-				
-				// 将 贴图赋予该 材质
-				// ------------------
-				if (Texture2D)
-				{
-					MaterialInstanceDnm2->SetTextureParameterValue("TV5", Texture2D);
-				}
-				else
-				{
-					UE_LOG(LogTemp, Error, TEXT("Texture2D is NULL"));
-				}
-
-				// 将材质赋予该 mesh 分片
-				// ----------------------
-				ProceduralMeshComp->SetMaterial(index, MaterialInstanceDnm2);
-			}
-			else
-			{
-				UE_LOG(LogTemp, Warning, TEXT("MaterialInstanceDnm is null"));
-			}
-
-			// 一个测试
-			// --------
-			TArray<UMaterialInterface *> mtris;
-			ProceduralMeshComp->GetUsedMaterials(mtris);
-			UE_LOG(LogTemp, Warning, TEXT("mtris' num is %d"), mtris.Num());
-
-			// 设置材质
-			// --------
-			/*if (index == 0)
-			{
-				static ConstructorHelpers::FObjectFinder<UMaterialInstance> TankStaticMesh(TEXT("MaterialInstanceConstant'/Engine/EditorMaterials/Utilities/LinearColorPicker_MATInst.LinearColorPicker_MATInst'"));
-				if (TankStaticMesh.Succeeded())
-				{
-					ProceduralMeshComp->SetMaterial(index, TankStaticMesh.Object);
-				}
-				else
-				{
-					UE_LOG(LogTemp, Warning, TEXT("TankStaticMesh is invalid"));
-				}
-			}*/
-		
+			// 添加到数组
+			// ----------
+			FMaterialSection * section = new FMaterialSection;
+			//section->m_MaterialInstanceDyn = MaterialInstanceDnm2;
+			section->m_ProceduralMeshComp = ProceduralMeshComp;
+			section->Material = this->Material;
+			section->m_MaterialSectionIndex = MaterialSectionArr.Num();
+			section->indicesArr = indicesArr;
+			section->verticesArr = verticesArr;
+			section->normalsArr = normalsArr;
+			section->uvsArr = uvsArr;
+			MaterialSectionArr.Add(section);
 
 			// 直接卸载
 			// --------
-			AOpenCTMHandler::m_CtmFreeContext(context);
-			context = NULL;
+			//AOpenCTMHandler::m_CtmFreeContext(context);
+			//context = NULL;
 		}
 
 		// 写完 calloc，马上写 free
@@ -693,5 +622,41 @@ void AMyActor::AnalysisBuffer(BYTE * buffer, int size)
 			free(contentBuffer);
 			contentBuffer = NULL;
 		}
+
+		blockloaded++;
+		/*if (blockloaded == 32)
+		{
+			break;
+		}*/
 	}
+
+	// 这里测试：一共有多少个 Mesh 分片
+	// --------------------------------
+	int sectionNum = MaterialSectionArr.Num(); //ProceduralMeshComp->GetNumSections();
+	UE_LOG(LogTemp, Warning, TEXT("[721:6]MaterialSectionArr's Num is %d"), sectionNum);
+
+	// 测试，遍历并赋予 Texture2D
+	// --------------------------
+	for (size_t i = 0; i < sectionNum; i++)
+	{
+		// Create Mesh Section
+		// CreateMeshSection_LinearColor 推荐使用此方法
+		// --------------------------------------------
+		MaterialSectionArr[i]->m_ProceduralMeshComp->CreateMeshSection_LinearColor(i, MaterialSectionArr[i]->verticesArr, MaterialSectionArr[i]->indicesArr, MaterialSectionArr[i]->normalsArr, MaterialSectionArr[i]->uvsArr, TArray<FLinearColor>(), TArray<FProcMeshTangent>(), false);
+
+		// 设置材质
+		// --------
+		MaterialSectionArr[i]->m_MaterialInstanceDyn = UMaterialInstanceDynamic::Create(this->Material, this, FName(*(FString("MI_Dynamic") + FString::FromInt(i))));
+
+		// MaterialInstanceDnm2->SetVectorParameterValue("AV3", FLinearColor(255 * 1.0f, 0 * 1.0f, 0 * 1.0f, 1));
+		// ------------------------------------------------------------------------------------------------------
+		MaterialSectionArr[i]->m_MaterialInstanceDyn->SetTextureParameterValue("TV5", Texture2D);
+		MaterialSectionArr[i]->m_ProceduralMeshComp->SetMaterial(MaterialSectionArr[i]->m_MaterialSectionIndex, MaterialSectionArr[i]->m_MaterialInstanceDyn);
+	}
+
+	// 测试
+	// -----------------------------------------------------------------------------------------------------
+	TArray<UMaterialInterface *> mtris;
+	ProceduralMeshComp->GetUsedMaterials(mtris);
+	UE_LOG(LogTemp, Warning, TEXT("mtris' num is %d"), mtris.Num());
 }
