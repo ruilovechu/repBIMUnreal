@@ -624,6 +624,14 @@ void AMyActor::AnalysisBuffer(BYTE * buffer, int size)
 					MaterialInstanceDnm2->SetVectorParameterValue("AV3", FLinearColor(0 * 1.0f, 0 * 1.0f, 255 * 1.0f, 1));
 				}*/
 				
+				//// 先调用外面的接口获取 UTexture2D 数据？
+				//// -------------------------------------
+				//TSharedRef<IHttpRequest> httpReuestimg = FHttpModule::Get().CreateRequest();
+				//httpReuestimg->SetVerb(TEXT("GET"));
+				//httpReuestimg->SetHeader(TEXT("Content-Type"), TEXT("APPLICATION/x-www-from-urlencoded"));
+				//httpReuestimg->SetURL(FString("https://bimcomposer.probim.cn/api/Model/GetFile?ProjectID=46d11566-6b7e-47a1-ba5d-12761ab9b55c&ModelID=67170069-1711-4f4c-8ee0-a715325942a1&VersionNO=&FileType=Texture&FileName=brickldnonlduniformldrunningldgrayppng"));
+				//httpReuestimg->OnProcessRequestComplete().BindUObject(this, &AMyActor::setTextureFromLoadImg);
+				//httpReuestimg->ProcessRequest();
 				
 				// 将 贴图赋予该 材质
 				// ------------------
