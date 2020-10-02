@@ -14,6 +14,7 @@
 #include "Materials/MaterialInstance.h"
 #include "../Model/FMaterialContent.h"
 #include "UObject/ConstructorHelpers.h"
+#include "ElementActor.h"
 
 #include "HAL/PlatformFilemanager.h"
 #include "Misc/FileHelper.h"
@@ -758,41 +759,85 @@ void AMyActor::AnalysisBuffer(BYTE * buffer, int size)
 		FMaterial2 & mtrObj = m_MapMaterial[materialId];
 		UE_LOG(LogTemp, Warning, TEXT("[759]color is %s"), *(mtrObj.Content_Obj.appearancecolor));
 
-		// Create Mesh Section
-		// CreateMeshSection_LinearColor 推荐使用此方法
-		// --------------------------------------------
-		MaterialSectionArr[i]->m_ProceduralMeshComp->CreateMeshSection_LinearColor(i, MaterialSectionArr[i]->verticesArr, MaterialSectionArr[i]->indicesArr, MaterialSectionArr[i]->normalsArr, MaterialSectionArr[i]->uvsArr, TArray<FLinearColor>(), TArray<FProcMeshTangent>(), false);
+		// 创建Actor
+		// ---------
+		//UClass* pBlueprintClass = StaticLoadClass(AElementActor::StaticClass(), nullptr, TEXT("Blueprint'/Game/Blueprints/Tests/BP_ElementActor.BP_ElementActor_C'"));
+		UClass* pBlueprintClass = StaticLoadClass(AElementActor::StaticClass(), this, TEXT("Blueprint'/Game/Blueprints/Tests/BP_ElementActor.BP_ElementActor_C'"));
 
-		// 指向材质
-		// --------
-		MaterialSectionArr[i]->m_MaterialInstanceDyn = UMaterialInstanceDynamic::Create(this->Material, this, FName(*(FString("MI_Dynamic") + FString::FromInt(i))));
-
-		// 设置材质参数 颜色
-		// -----------------
-		/*	MaterialSectionArr[i]->m_MaterialInstanceDyn->SetVectorParameterValue("AV3", FLinearColor(100.0f, 0,0, 0.2));*/
-
-		// 调用接口，获取贴图
-		// ------------------
-		if (mtrObj.Content_Obj.img != FString(""))
+		if (pBlueprintClass)
 		{
-			TSharedRef<IHttpRequest> httpReuestimg = FHttpModule::Get().CreateRequest();
-			httpReuestimg->SetVerb(TEXT("GET"));
-			httpReuestimg->SetHeader(TEXT("Content-Type"), TEXT("APPLICATION/x-www-from-urlencoded"));
-			httpReuestimg->SetURL(AUrlsHandler::GetUrlOfGetTextureFile(mtrObj.Content_Obj.img));
-			httpReuestimg->OnProcessRequestComplete().BindRaw(MaterialSectionArr[i], &FMaterialSection::setTextureFromLoadImg2);
-			httpReuestimg->ProcessRequest();
+			// 动态添加一个 Actor
+			// ------------------
+			AElementActor * theActor = GetWorld()->SpawnActor<AElementActor>(pBlueprintClass);
 
-			// 设置材质参数 贴图
-			// -----------------
-			//if (tmpTexture)//MaterialSectionArr[i]->Texture2D)
-			//{
-			//	MaterialSectionArr[i]->m_MaterialInstanceDyn->SetTextureParameterValue("TV5", tmpTexture);// MaterialSectionArr[i]->Texture2D);
-			//}
+			// 为这个刚添加的 Actor 创建 Mesh 分片
+			// 每个Actor只负责一个分片
+			// -----------------------
+			theActor->ProceduralMeshComp->CreateMeshSection_LinearColor(0, MaterialSectionArr[i]->verticesArr, MaterialSectionArr[i]->indicesArr, MaterialSectionArr[i]->normalsArr, MaterialSectionArr[i]->uvsArr, TArray<FLinearColor>(), TArray<FProcMeshTangent>(), false);
+
+			// 创建动态材质实例
+			// ----------------
+			auto dynMaterial = UMaterialInstanceDynamic::Create(theActor->Material, theActor, FName(*(FString("Name_") + FString::FromInt(0))));
+			theActor->m_MaterialInstanceDyn = dynMaterial;
+
+			// 修改这个材质的一个参数
+			// ----------------------
+			dynMaterial->SetVectorParameterValue("AV3", FLinearColor(0.4f, 0.4f, 0.4f, 1));
+
+			// 设置到这个 actor 的 Mesh 上
+			// ---------------------------
+			theActor->ProceduralMeshComp->SetMaterial(0, dynMaterial);
+
+			// 调用接口，获取贴图
+			// ------------------
+			if (mtrObj.Content_Obj.img != FString(""))
+			{
+				TSharedRef<IHttpRequest> httpReuestimg = FHttpModule::Get().CreateRequest();
+				httpReuestimg->SetVerb(TEXT("GET"));
+				httpReuestimg->SetHeader(TEXT("Content-Type"), TEXT("APPLICATION/x-www-from-urlencoded"));
+				httpReuestimg->SetURL(AUrlsHandler::GetUrlOfGetTextureFile(mtrObj.Content_Obj.img));
+				httpReuestimg->OnProcessRequestComplete().BindUObject(theActor, &AElementActor::setTextureFromLoadImg3);
+				httpReuestimg->ProcessRequest();
+			}
+
+			continue;
 		}
 
-		// 设置材质到 Mesh 组件
-		// --------------------
-		MaterialSectionArr[i]->m_ProceduralMeshComp->SetMaterial(MaterialSectionArr[i]->m_MaterialSectionIndex, MaterialSectionArr[i]->m_MaterialInstanceDyn);
+		//// Create Mesh Section
+		//// CreateMeshSection_LinearColor 推荐使用此方法
+		//// --------------------------------------------
+		//MaterialSectionArr[i]->m_ProceduralMeshComp->CreateMeshSection_LinearColor(i, MaterialSectionArr[i]->verticesArr, MaterialSectionArr[i]->indicesArr, MaterialSectionArr[i]->normalsArr, MaterialSectionArr[i]->uvsArr, TArray<FLinearColor>(), TArray<FProcMeshTangent>(), false);
+
+		//// 指向材质
+		//// --------
+		//MaterialSectionArr[i]->m_MaterialInstanceDyn = UMaterialInstanceDynamic::Create(this->Material, this, FName(*(FString("MI_Dynamic") + FString::FromInt(i))));
+
+		//// 设置材质参数 颜色
+		//// -----------------
+		///*	MaterialSectionArr[i]->m_MaterialInstanceDyn->SetVectorParameterValue("AV3", FLinearColor(100.0f, 0,0, 0.2));*/
+
+		//// 调用接口，获取贴图
+		//// ------------------
+		//if (mtrObj.Content_Obj.img != FString(""))
+		//{
+		//	TSharedRef<IHttpRequest> httpReuestimg = FHttpModule::Get().CreateRequest();
+		//	httpReuestimg->SetVerb(TEXT("GET"));
+		//	httpReuestimg->SetHeader(TEXT("Content-Type"), TEXT("APPLICATION/x-www-from-urlencoded"));
+		//	httpReuestimg->SetURL(AUrlsHandler::GetUrlOfGetTextureFile(mtrObj.Content_Obj.img));
+		//	httpReuestimg->OnProcessRequestComplete().BindRaw(MaterialSectionArr[i], &FMaterialSection::setTextureFromLoadImg2);
+		//	httpReuestimg->ProcessRequest();
+
+		//	// 设置材质参数 贴图
+		//	// -----------------
+		//	//if (tmpTexture)//MaterialSectionArr[i]->Texture2D)
+		//	//{
+		//	//	MaterialSectionArr[i]->m_MaterialInstanceDyn->SetTextureParameterValue("TV5", tmpTexture);// MaterialSectionArr[i]->Texture2D);
+		//	//}
+		//}
+
+		//// 设置材质到 Mesh 组件
+		//// --------------------
+		//MaterialSectionArr[i]->m_ProceduralMeshComp->SetMaterial(MaterialSectionArr[i]->m_MaterialSectionIndex, MaterialSectionArr[i]->m_MaterialInstanceDyn);
 		
 	}
 
