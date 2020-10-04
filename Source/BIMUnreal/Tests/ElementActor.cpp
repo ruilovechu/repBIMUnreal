@@ -54,7 +54,7 @@ void AElementActor::setTextureFromLoadImg3(FHttpRequestPtr _request, FHttpRespon
 
 	IImageWrapperModule& temp_img_module = FModuleManager::LoadModuleChecked<IImageWrapperModule>(FName("ImageWrapper"));
 	IImageWrapperPtr temp_imgWrapper = temp_img_module.CreateImageWrapper(EImageFormat::JPEG);//JPG »ò png µÈ
-	TArray<uint8> temp_fileData = _response->GetContent();
+	TArray<uint8> binarayData = _response->GetContent();
 
 	if (!temp_imgWrapper.IsValid())
 	{
@@ -62,17 +62,17 @@ void AElementActor::setTextureFromLoadImg3(FHttpRequestPtr _request, FHttpRespon
 		return;
 	}
 
-	if (!temp_imgWrapper->SetCompressed(temp_fileData.GetData(), temp_fileData.Num()))
+	if (!temp_imgWrapper->SetCompressed(binarayData.GetData(), binarayData.Num()))
 	{
 		UE_LOG(LogTemp, Warning, TEXT("ImageWrapper can¡®t Set Compressed, url is %s"), *URL);
 		return;
 	}
 
-	const TArray<uint8>* temp_unCompressedRGBA = NULL;
+	const TArray<uint8>* rawData = NULL;
 
-	if (!temp_imgWrapper->GetRaw(ERGBFormat::RGBA, 8, temp_unCompressedRGBA))
+	if (!temp_imgWrapper->GetRaw(ERGBFormat::RGBA, 8, rawData))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("can¡®t get Raw temp_unCompressedRGBA"));
+		UE_LOG(LogTemp, Warning, TEXT("can¡®t get Raw rawData"));
 		return;
 	}
 
@@ -80,47 +80,52 @@ void AElementActor::setTextureFromLoadImg3(FHttpRequestPtr _request, FHttpRespon
 
 	auto temp_dataPtr = static_cast<uint8*>(this->Texture2D->PlatformData->Mips[0].BulkData.Lock(LOCK_READ_WRITE));
 
-	FColor temp_color;
-	uint8 temp_colorPoint;
-	TArray<FColor> temp_arr_color;
-	for (int i = 0; i < temp_unCompressedRGBA->Num(); i++)
-	{
-		temp_colorPoint = (*temp_unCompressedRGBA)[i];
-		temp_color.R = temp_colorPoint;
-		i++;
-		temp_colorPoint = (*temp_unCompressedRGBA)[i];
-		temp_color.G = temp_colorPoint;
-		i++;
-		temp_colorPoint = (*temp_unCompressedRGBA)[i];
-		temp_color.B = temp_colorPoint;
-		i++;
-		temp_colorPoint = (*temp_unCompressedRGBA)[i];
-		temp_color.A = temp_colorPoint;
-		temp_arr_color.Add(temp_color);
-	}
+#pragma region old codes
+	//FColor temp_color;
+//uint8 temp_colorPoint;
+//TArray<FColor> temp_arr_color;
+//for (int i = 0; i < temp_unCompressedRGBA->Num(); i++)
+//{
+//	temp_colorPoint = (*temp_unCompressedRGBA)[i];
+//	temp_color.R = temp_colorPoint;
+//	i++;
+//	temp_colorPoint = (*temp_unCompressedRGBA)[i];
+//	temp_color.G = temp_colorPoint;
+//	i++;
+//	temp_colorPoint = (*temp_unCompressedRGBA)[i];
+//	temp_color.B = temp_colorPoint;
+//	i++;
+//	temp_colorPoint = (*temp_unCompressedRGBA)[i];
+//	temp_color.A = temp_colorPoint;
+//	temp_arr_color.Add(temp_color);
+//}
 
-	uint8* DestPtr = NULL;
-	const FColor* SrcPtr = NULL;
-	for (int32 y = 0; y < temp_imgWrapper->GetHeight(); y++)
-	{
-		DestPtr = &temp_dataPtr[(temp_imgWrapper->GetHeight() - 1 - y) * temp_imgWrapper->GetWidth() * sizeof(FColor)];
-		SrcPtr = const_cast<FColor*>(&temp_arr_color[(temp_imgWrapper->GetHeight() - 1 - y) * temp_imgWrapper->GetWidth()]);
-		for (int32 x = 0; x < temp_imgWrapper->GetWidth(); x++)
-		{
-			*DestPtr++ = SrcPtr->R;
-			*DestPtr++ = SrcPtr->G;
-			*DestPtr++ = SrcPtr->B;
-			if (true)
-			{
-				*DestPtr++ = SrcPtr->A;
-			}
-			else
-			{
-				*DestPtr++ = 0xFF;
-			}
-			SrcPtr++;
-		}
-	}
+//uint8* DestPtr = NULL;
+//const FColor* SrcPtr = NULL;
+//for (int32 y = 0; y < temp_imgWrapper->GetHeight(); y++)
+//{
+//	DestPtr = &temp_dataPtr[(temp_imgWrapper->GetHeight() - 1 - y) * temp_imgWrapper->GetWidth() * sizeof(FColor)];
+//	SrcPtr = const_cast<FColor*>(&temp_arr_color[(temp_imgWrapper->GetHeight() - 1 - y) * temp_imgWrapper->GetWidth()]);
+//	for (int32 x = 0; x < temp_imgWrapper->GetWidth(); x++)
+//	{
+//		*DestPtr++ = SrcPtr->R;
+//		*DestPtr++ = SrcPtr->G;
+//		*DestPtr++ = SrcPtr->B;
+//		if (true)
+//		{
+//			*DestPtr++ = SrcPtr->A;
+//		}
+//		else
+//		{
+//			*DestPtr++ = 0xFF;
+//		}
+//		SrcPtr++;
+//	}
+//}  
+#pragma endregion
+
+
+	FMemory::Memcpy(temp_dataPtr, rawData->GetData(), rawData->Num());
 
 	this->Texture2D->PlatformData->Mips[0].BulkData.Unlock();
 
