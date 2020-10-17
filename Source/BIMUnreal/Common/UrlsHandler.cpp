@@ -64,3 +64,10 @@ FString AUrlsHandler::GetUrlOfGetTextureFile(FString filenameziped)
 	FString ret = AConfigHandler::GetModelApiUrl() + FString("/api/Model/GetFile?ProjectID=") + m_ProjectID + FString("&ModelID=") + m_ModelID + FString("&VersionNO=&FileType=Texture&FileName=") + filenameziped;
 	return ret;
 }
+
+FString AUrlsHandler::GetUrlOfGetModel()
+{
+	// https://bimcomposer.probim.cn/api/Prj/GetModel?ProjectID=46d11566-6b7e-47a1-ba5d-12761ab9b55c&ModelID=67170069-1711-4f4c-8ee0-a715325942a1
+	FString ret = AConfigHandler::GetModelApiUrl() + FString("/api/Prj/GetModel?ProjectID=") + m_ProjectID + FString("&ModelID=") + m_ModelID;
+	return ret;
+}

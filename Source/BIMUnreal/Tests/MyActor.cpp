@@ -22,6 +22,7 @@
 #include "Modules/ModuleManager.h"
 #include "IImageWrapperModule.h"
 #include "../Model/FBlockMapping_Item.h"
+#include "../Model/FModelInfo.h"
 
 #include "Engine/Texture2DDynamic.h"
 #include "Engine/Engine.h"
@@ -132,12 +133,26 @@ AMyActor::AMyActor()
 	ProceduralMeshComp = CreateDefaultSubobject<UProceduralMeshComponent>("ProceduralMeshComp");
 	RootComponent = ProceduralMeshComp;
 
-	static ConstructorHelpers::FObjectFinder<UMaterial> MaterialOb(TEXT("Material'/Game/Materials/MTR_T1.MTR_T1'"));
-	Material = MaterialOb.Object;
+	//static ConstructorHelpers::FObjectFinder<UMaterial> MaterialOb(TEXT("Material'/Game/Materials/MTR_T1.MTR_T1'"));
+	//Material = MaterialOb.Object;
 
-	//Texture2D'/Engine/EngineMaterials/DefaultBokeh.DefaultBokeh'
-	static ConstructorHelpers::FObjectFinder<UTexture2D> Texture2DOb(TEXT("Texture2D'/Engine/EngineMaterials/DefaultDiffuse.DefaultDiffuse'"));
-	Texture2D = Texture2DOb.Object;
+	////Texture2D'/Engine/EngineMaterials/DefaultBokeh.DefaultBokeh'
+	//static ConstructorHelpers::FObjectFinder<UTexture2D> Texture2DOb(TEXT("Texture2D'/Engine/EngineMaterials/DefaultDiffuse.DefaultDiffuse'"));
+	//Texture2D = Texture2DOb.Object;
+
+	//必须放到构造函数中
+	static ConstructorHelpers::FObjectFinder<UMaterial> baseColorMaterialAsset(TEXT("'Material'/Game/Materials/M_BaseColor.M_BaseColor''"));
+	static ConstructorHelpers::FObjectFinder<UMaterial> textureMaterialAsset(TEXT("'Material'/Game/Materials/M_Texture.M_Texture''"));
+	static ConstructorHelpers::FObjectFinder<UMaterial> translucentMaterialAsset(TEXT("'Material'/Game/Materials/M_Translucent.M_Translucent''"));
+
+	if (baseColorMaterialAsset.Succeeded())
+		pBaseColorMaterial = baseColorMaterialAsset.Object;
+
+	if (textureMaterialAsset.Succeeded())
+		pTextureMaterial = textureMaterialAsset.Object;
+
+	if (translucentMaterialAsset.Succeeded())
+		pTranslucentMaterial = translucentMaterialAsset.Object;
 
 
 	//Texture2D
@@ -146,6 +161,69 @@ AMyActor::AMyActor()
 	MaterialInstance = MaterialInsOb.Object;*/
 }
 
+void AMyActor::CreateTranslucentMaterial(const FString materialId, FColor baseColor, FMaterialContent& content)
+{
+	//创建半透明材质
+	auto pMaterialInstance = UMaterialInstanceDynamic::Create(pTranslucentMaterial, this, FName(*materialId));
+
+	//设置基础颜色
+	pMaterialInstance->SetVectorParameterValue("MainColor", baseColor);
+	//设置透明度
+	pMaterialInstance->SetScalarParameterValue("Opacity", content.tp);
+	//设置粗糙度
+	pMaterialInstance->SetScalarParameterValue("Roughness", 1 - content.Glossness);
+
+	dynamicMaterialMap.Emplace(materialId, pMaterialInstance);
+}
+
+void AMyActor::CreateBaseMaterial(const FString materialId, FColor baseColor, FMaterialContent& content)
+{
+	//创建基础材质
+	auto pMaterialInstance = UMaterialInstanceDynamic::Create(pBaseColorMaterial, this, FName(*materialId));
+
+	//设置基础颜色
+	pMaterialInstance->SetVectorParameterValue("MainColor", baseColor);
+
+	//设置材质的金属度
+	float metallicValue = content.ismetal == true ? 1.0f : 0.0f;
+	pMaterialInstance->SetScalarParameterValue("Metallic", metallicValue);
+
+	//设置粗糙度
+	pMaterialInstance->SetScalarParameterValue("Roughness", 1 - content.Glossness);
+
+	dynamicMaterialMap.Emplace(materialId, pMaterialInstance);
+}
+
+void AMyActor::CreateTextureMaterial(const FString materialId, FColor baseColor, FMaterialContent& content)
+{
+
+	//创建纹理材质
+	auto pMaterialInstance = UMaterialInstanceDynamic::Create(pTextureMaterial, this, FName(*materialId));
+	pMaterialInstance->SetTextureParameterValue("MainTexture", m_TextureMap[content.img]);
+
+	//设置纹理的UV偏移
+	pMaterialInstance->SetScalarParameterValue("OffsetX", content.uf);
+	pMaterialInstance->SetScalarParameterValue("OffsetY", content.vf);
+
+	//设置纹理的UV缩放
+	content.usc != 0.0f ? content.usc : 1.0f;
+	content.vsc != 0.0f ? content.vsc : 1.0f;
+
+	pMaterialInstance->SetScalarParameterValue("ScaleX", content.usc);
+	pMaterialInstance->SetScalarParameterValue("ScaleY", content.vsc);
+
+	//设置基础颜色
+	pMaterialInstance->SetVectorParameterValue("MainColor", baseColor);
+
+	//设置材质的金属度
+	float metallicValue = content.ismetal == true ? 1.0f : 0.0f;
+	pMaterialInstance->SetScalarParameterValue("Metallic", metallicValue);
+
+	//设置粗糙度
+	pMaterialInstance->SetScalarParameterValue("Roughness", 1 - content.Glossness);
+
+	dynamicMaterialMap.Emplace(materialId, pMaterialInstance);
+}
 
 
 // Called when the game starts or when spawned
@@ -166,6 +244,11 @@ void AMyActor::BeginPlay()
 	// -----------------------
 	m_MapMaterial.Empty();
 
+	// 清空 m_TextureNameSet 数据
+	// --------------------------
+	m_TextureNameSet.Empty();
+	m_TextureMap.Empty();
+
 	// 清掉所有的 MeshSection !
 	// ------------------------
 	ProceduralMeshComp->ClearAllMeshSections();
@@ -175,79 +258,71 @@ void AMyActor::BeginPlay()
 	// https://bimcomposer.probim.cn/api/Model/GetAllElementsInView?ProjectID=7d96928d-5add-45cb-a139-2c787141e50d&ModelID=9f49078c-180e-4dc5-b696-5a50a9e09016&VersionNO=&ViewID=142554
 	AUrlsHandler::InitParameters(FString("46d11566-6b7e-47a1-ba5d-12761ab9b55c"), FString("67170069-1711-4f4c-8ee0-a715325942a1"), FString("69323"));
 	
-
-
-
-	// 请求接口测试2
-	// -------------
-	FString urlOfCacheBlockCnt = AUrlsHandler::GetUrlOfGetBlockCacheCount();
-	TSharedRef<IHttpRequest> httpReuest2 = FHttpModule::Get().CreateRequest();
-	httpReuest2->SetVerb(TEXT("GET"));
-	httpReuest2->SetHeader(TEXT("Content-Type"), TEXT("APPLICATION/x-www-from-urlencoded"));
-	httpReuest2->SetURL(urlOfCacheBlockCnt);
-	httpReuest2->OnProcessRequestComplete().BindUObject(this, &AMyActor::OnRequestComplete_CacheBlockCount);
-	httpReuest2->ProcessRequest();
-
-	// 先调用外面的接口获取 UTexture2D 数据？
-	// -------------------------------------
-	//TSharedRef<IHttpRequest> httpReuestimg = FHttpModule::Get().CreateRequest();
-	//httpReuestimg->SetVerb(TEXT("GET"));
-	//httpReuestimg->SetHeader(TEXT("Content-Type"), TEXT("APPLICATION/x-www-from-urlencoded"));
-	//httpReuestimg->SetURL(FString("https://bimcomposer.probim.cn/api/Model/GetFile?ProjectID=46d11566-6b7e-47a1-ba5d-12761ab9b55c&ModelID=67170069-1711-4f4c-8ee0-a715325942a1&VersionNO=&FileType=Texture&FileName=brickldnonlduniformldrunningldgrayppng"));
-	//httpReuestimg->OnProcessRequestComplete().BindUObject(this, &AMyActor::setTextureFromLoadImg);
-	//httpReuestimg->ProcessRequest();
-
-#if 0
-	// json 操作测试
-	// -------------
-	FString server_data;
-	TSharedRef<TJsonWriter<TCHAR, TPrettyJsonPrintPolicy<TCHAR>>> JsonWriter = TJsonWriterFactory<TCHAR, TPrettyJsonPrintPolicy<TCHAR>>::Create(&server_data);
-	JsonWriter->WriteObjectStart();
-	JsonWriter->WriteValue("name", TEXT("xueys"));
-	JsonWriter->WriteValue("password", TEXT("000000"));
-	JsonWriter->WriteValue("name1", ("xueys"));
-	JsonWriter->WriteValue("password1", ("000000"));
-	JsonWriter->WriteObjectEnd();
-	JsonWriter->Close();
-
-
-	//UE_LOG(LogTemp, Warning, TEXT("%s"), *server_data);
-
-	TSharedPtr<FJsonObject> JsonObject;
-	bool bIsOk = AJsonHandler::Deserialize(server_data, &JsonObject);
-	if (bIsOk)
-	{
-		//UE_LOG(LogTemp, Warning, TEXT("IsOK"));
-
-		FString dataname = JsonObject->GetStringField("name");
-		FString datapwd = JsonObject->GetStringField("password");
-		//UE_LOG(LogTemp, Warning, TEXT("++ %s"), *dataname);
-		//UE_LOG(LogTemp, Warning, TEXT("++ %s"), *datapwd);
-	}
-	else
-	{
-		UE_LOG(LogTemp, Warning, TEXT("IsNotOK"));
-	}
-
-	// 数组反序列化
+	// 请求接口测试1
+	// 调用GetModel
 	// ------------
-	FString JsonValue = "[{\"author\":\"4446545646544\", \"name\":\"a1123\", \"sex\":false},{\"author\":\"jack\", \"name\":\"a1123456\", \"sex\":true}]";
-	TArray<TSharedPtr<FJsonValue>> JsonParsed;
-	bool BFlag = AJsonHandler::DeserializeList(JsonValue, &JsonParsed);
-	if (BFlag)
-	{
-		int ArrayNumber = JsonParsed.Num();
-		for (int i = 0; i < ArrayNumber; i++)
-		{
-			FString FStringAuthor = JsonParsed[i]->AsObject()->GetStringField("author");
-			FString FStringName = JsonParsed[i]->AsObject()->GetStringField("name");
-			bool sex = JsonParsed[i]->AsObject()->GetBoolField("sex");
+	FString urlOfGetModel = AUrlsHandler::GetUrlOfGetModel();
+	TSharedRef<IHttpRequest> httpReuestGetModel = FHttpModule::Get().CreateRequest();
+	httpReuestGetModel->SetVerb(TEXT("GET"));
+	httpReuestGetModel->SetHeader(TEXT("Content-Type"), TEXT("APPLICATION/x-www-from-urlencoded"));
+	httpReuestGetModel->SetURL(urlOfGetModel);
+	httpReuestGetModel->OnProcessRequestComplete().BindUObject(this, &AMyActor::OnRequestComplete_GetModel);
+	httpReuestGetModel->ProcessRequest();
 
-			//UE_LOG(LogTemp, Warning, TEXT("-- %s"), *FStringAuthor);
-			UE_LOG(LogTemp, Warning, TEXT("-- %s, %d"), *FStringName, sex);
-		}
+	
+}
+
+void AMyActor::OnRequestComplete_GetModel(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bConnectedSuccessfully)
+{
+	if (!Request.IsValid() || !Response.IsValid())
+	{
+		return;
 	}
-#endif
+
+	if (bConnectedSuccessfully)
+	{
+		// 将返回的json进行反序列化
+		// ------------------------
+		FString contentStr = Response->GetContentAsString();
+
+		FModelInfo modelInfo;
+		TSharedPtr<FJsonObject> tempParsed;
+		bool tempFlag = AJsonHandler::Deserialize(contentStr, &tempParsed);
+		if (tempFlag)
+		{
+			modelInfo.ID = tempParsed.Get()->GetStringField(FString("ID"));
+			modelInfo.Name = tempParsed.Get()->GetStringField(FString("Name"));
+			modelInfo.ProjectID = tempParsed.Get()->GetStringField(FString("ProjectID"));
+			modelInfo.Views = tempParsed.Get()->GetArrayField(FString("Views"));
+
+			for (size_t i = 0; i < modelInfo.Views.Num(); i++)
+			{
+				auto & item = modelInfo.Views[i];
+
+				FViewInfo viewinfo;
+				viewinfo.ID = AJsonHandler::TryGetStringField(item, FString("ID"), FString(""));
+				viewinfo.IsDefault = AJsonHandler::TryGetBoolField(item, FString("IsDefault"), false);
+				viewinfo.ModelID = AJsonHandler::TryGetStringField(item, FString("ModelID"), FString(""));
+				viewinfo.Name = AJsonHandler::TryGetStringField(item, FString("Name"), FString(""));
+				viewinfo.Override = AJsonHandler::TryGetStringField(item, FString("Override"), FString(""));
+
+				TSharedPtr<FJsonObject> tempParsed2;
+				bool tempFlag2 = AJsonHandler::Deserialize(viewinfo.Override, &tempParsed2);
+				if (tempFlag2)
+				{
+					viewinfo.Override_obj.displaystyle = AJsonHandler::TryGetStringField_FromObj(tempParsed2, FString("displaystyle"), FString(""));
+				}
+
+				modelInfo.Views_objlist.Add(viewinfo);
+			}
+
+			// 遍历所有视图，找到那个默认视图，并进行加载？
+			// -------------------------------------------
+			ReadViewInfos(modelInfo.Views_objlist);
+		}
+
+		UE_LOG(LogTemp, Warning, TEXT("214: %s"), *contentStr);
+	}
 }
 
 void AMyActor::OnRequestComplete_AllElementsInView(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bConnectedSuccessfully)
@@ -464,6 +539,154 @@ void AMyActor::OnRequestComplete_GetCacheBlock(FHttpRequestPtr Request, FHttpRes
 	}
 }
 
+void AMyActor::OnRequestComplete_GetTexture(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bConnectedSuccessfully)
+{
+	if (!Request.IsValid() || !Response.IsValid())
+	{
+		return;
+	}
+
+	if (bConnectedSuccessfully)
+	{
+		TArray<uint8> imageData = Response->GetContent();
+		UE_LOG(LogTemp, Warning, TEXT("imageData's length = %d"), imageData.Num());
+
+		//从URL中提取纹理的名称
+		// --------------------
+		FString fileName = Request->GetURLParameter("FileName");
+
+		// 根据 buffer 生成 Texture，并添加到 TextureMap
+		// ---------------------------------------------
+		CreateTexture(&imageData, fileName);
+		this->m_TextureCount++;
+
+		// 全部纹理生成完成后，创建材质
+		// ----------------------------
+		if (this->m_TextureNameSet.Num() == m_TextureCount)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("Begin to Create Material"));
+
+			// 创建材质并添加到 dynamicMaterialMap
+			// -----------------------------------
+			for (auto material : this->m_MapMaterial)
+			{
+				FMaterialContent materialContent = material.Value.Content_Obj;
+
+				FString colorHex = materialContent.tinttoggle ? (!materialContent.tintcolor.IsEmpty() ? materialContent.tintcolor : TEXT("d6f5fc"))
+					: (this->m_HasApperenanceColor ? (!materialContent.appearancecolor.IsEmpty() ? materialContent.appearancecolor : TEXT("d6f5fc"))
+						: (!materialContent.color.IsEmpty() ? materialContent.color : TEXT("d6f5fc")));
+
+				colorHex = TEXT("#") + colorHex;
+
+				auto color = FColor::FromHex(colorHex);
+
+				//UMaterialInstanceDynamic* pMaterialInstance;
+				FString imgName = materialContent.img;
+
+				//判断是否是半透明材质
+				if (materialContent.tp < 1.0f)
+				{
+					//创建半透明材质
+					CreateTranslucentMaterial(material.Key, color, materialContent);
+				}
+				else
+				{
+					if (!imgName.IsEmpty() && this->m_TextureMap.Contains(imgName))
+					{
+						//创建纹理材质
+						CreateTextureMaterial(material.Key, color, materialContent);
+					}
+					else
+					{
+						//创建基础颜色材质
+						CreateBaseMaterial(material.Key, color, materialContent);
+					}
+				}
+
+			}
+		
+			// 请求 blockCount 等后续操作
+			// --------------------------
+			// 请求接口测试2
+			// 后续放到 GetModel的 回调中
+			// --------------------------
+			FString urlOfCacheBlockCnt = AUrlsHandler::GetUrlOfGetBlockCacheCount();
+			TSharedRef<IHttpRequest> httpReuest2 = FHttpModule::Get().CreateRequest();
+			httpReuest2->SetVerb(TEXT("GET"));
+			httpReuest2->SetHeader(TEXT("Content-Type"), TEXT("APPLICATION/x-www-from-urlencoded"));
+			httpReuest2->SetURL(urlOfCacheBlockCnt);
+			httpReuest2->OnProcessRequestComplete().BindUObject(this, &AMyActor::OnRequestComplete_CacheBlockCount);
+			httpReuest2->ProcessRequest();
+		}
+
+	}
+}
+
+void AMyActor::CreateTexture(TArray<uint8>* buffer, const FString textureName)
+{
+	EImageFormat imageFormat;
+
+	if (textureName.EndsWith(TEXT("ppng")))
+	{
+		imageFormat = EImageFormat::JPEG;
+	}
+	else if (textureName.EndsWith(TEXT("pjpg")))
+	{
+		imageFormat = EImageFormat::PNG;
+	}
+	else
+		imageFormat = EImageFormat::Invalid;
+
+	UE_LOG(LogTemp, Error, TEXT("%s"), *textureName);
+
+	if (imageFormat == EImageFormat::Invalid)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("%s Invalid or unrecognized format"), *textureName);
+		return;
+	}
+
+	IImageWrapperModule& imageModule = FModuleManager::LoadModuleChecked<IImageWrapperModule>(FName("ImageWrapper"));
+	TSharedPtr<IImageWrapper>  pImageWrapper = imageModule.CreateImageWrapper(imageFormat);
+
+	if (!pImageWrapper.IsValid())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("%s ImageWrapper  is InValid"), *textureName);
+		return;
+	}
+
+	if (!pImageWrapper->SetCompressed(buffer->GetData(), buffer->Num()))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("%s ImageWrapper can't Set Compressed "), *textureName);
+		return;
+	}
+
+	const TArray<uint8>* unCompressedRGBA = nullptr;
+
+	if (!pImageWrapper->GetRaw(ERGBFormat::BGRA, 8, unCompressedRGBA))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("%s can't get Raw unCompressedRGBA"), *textureName);
+		return;
+	}
+
+	//创建Texture2D纹理
+	auto pTexture = UTexture2D::CreateTransient(pImageWrapper->GetWidth(), pImageWrapper->GetHeight(), PF_B8G8R8A8, FName(*textureName));
+
+	//锁住纹理数据，以便修改
+	auto pTextureData = static_cast<uint8*>(pTexture->PlatformData->Mips[0].BulkData.Lock(LOCK_READ_WRITE));
+
+	FMemory::Memcpy(pTextureData, unCompressedRGBA->GetData(), unCompressedRGBA->Num());
+
+	//解锁纹理
+	pTexture->PlatformData->Mips[0].BulkData.Unlock();
+	pTexture->UpdateResource();
+
+	if (!this->m_TextureMap.Contains(textureName))
+	{
+		this->m_TextureMap.Emplace(textureName, pTexture);
+	}
+	//UE_LOG(LogTemp,Error,TEXT("Load TextureName:%s"), *textureName);
+}
+
 void AMyActor::OnRequestComplete_GetMaterials(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bConnectedSuccessfully)
 {
 	if (!Request.IsValid() || !Response.IsValid())
@@ -481,6 +704,11 @@ void AMyActor::OnRequestComplete_GetMaterials(FHttpRequestPtr Request, FHttpResp
 		bool BFlag = AJsonHandler::DeserializeList(allMaterials, &originParsed);
 		if (BFlag)
 		{
+			//// 贴图名称的 Set
+			//// --------------
+			//TSet<FString> textureNameSet;
+			//int textureCount;
+
 			for (size_t i = 0; i < originParsed.Num(); i++)
 			{
 				FMaterial2 mtr;
@@ -526,17 +754,37 @@ void AMyActor::OnRequestComplete_GetMaterials(FHttpRequestPtr Request, FHttpResp
 				}
 
 				//m_Materials.Add(mtr);
+				// 添加材质id 与 内容的 map
+				// ------------------------
 				m_MapMaterial.Add(mtr.ID, mtr);
+
+				// 如果有贴图，添加名称到 Set 中
+				// -----------------------------
+				if (!mtr.Content_Obj.img.IsEmpty())
+				{
+					m_TextureNameSet.Add(mtr.Content_Obj.img);
+				}
 			}
+
+			// 遍历 m_TextureNameSet，来下载贴图
+			// -------------------------------
+			for (auto textureName : m_TextureNameSet)
+			{
+				FString urlOfGetTexture = AUrlsHandler::GetUrlOfGetTextureFile(textureName);
+				TSharedRef<IHttpRequest> httpReuest = FHttpModule::Get().CreateRequest();
+				httpReuest->SetVerb(TEXT("GET"));
+				httpReuest->SetHeader(TEXT("Content-Type"), TEXT("APPLICATION/x-www-from-urlencoded"));
+				httpReuest->SetURL(urlOfGetTexture);
+				httpReuest->OnProcessRequestComplete().BindUObject(this, &AMyActor::OnRequestComplete_GetTexture);
+				httpReuest->ProcessRequest();
+			}
+
 		}
-
-
-
-
-
 		
 	}
 }
+
+
 
 void AMyActor::Tick(float DeltaTime)
 {
@@ -948,6 +1196,18 @@ void AMyActor::SpawnActorsByElements(TArray<FElement> eles)
 				}
 				pElementActor->ProceduralMeshComp->CreateMeshSection_LinearColor(0, positions, indexs, TArray<FVector>(), uvos, TArray<FLinearColor>(), TArray<FProcMeshTangent>(), false);
 #endif
+
+				// loadMesh
+				// --------
+			/*	FProcMeshSection* mesh = ABlockHandlerActor::GetMeshMap()->Find(items[i].blockId);
+				UMaterialInstanceDynamic* material = AMaterialHandlerActor::GetMaterialMap()[items[i].materialId];
+				pElementActor->LoadMesh(0, mesh, material);*/
+
+				UMaterialInstanceDynamic * material = this->dynamicMaterialMap[items[j].materialId];
+				pElementActor->ProceduralMeshComp->SetMaterial(0, material);
+				pElementActor->ProceduralMeshComp->UpdateBounds();
+
+				
 			}
 		}
 	}
@@ -999,4 +1259,42 @@ FTransform AMyActor::GetElementTransform(TArray<double> transform_list)
 	//mat.M[2][3] *= 100;
 
 	return FTransform(mat);
+}
+
+// 遍历所有视图，找到那个默认视图，并进行加载？
+// -------------------------------------------
+void AMyActor::ReadViewInfos(TArray<FViewInfo> viewInfos)
+{
+	for (int i = 0; i < viewInfos.Num(); i++)
+	{
+		if (viewInfos[i].IsDefault)
+		{
+			// TODO what?
+			// ----------
+			TArray<FString> overrides;
+			overrides.Emplace(TEXT("Rendering"));
+			overrides.Emplace(TEXT("Realistic"));
+			overrides.Emplace(TEXT("RealisticWithEdges"));
+			bool hasApperenanceColor;
+			if ((!viewInfos[i].Override_obj.displaystyle.IsEmpty()) && (overrides.IndexOfByKey(viewInfos[i].Override_obj.displaystyle) != INDEX_NONE))
+			{
+				hasApperenanceColor = true;
+			}
+			else
+			{
+				hasApperenanceColor = false;
+			}
+			this->m_HasApperenanceColor = hasApperenanceColor;
+
+			// 加载材质，内部用到 m_HasApperenanceColor
+			// ----------------------------------------
+			FString urlOfGetMaterials = AUrlsHandler::GetUrlOfGetMaterials();
+			TSharedRef<IHttpRequest> httpReuestGetMaterials = FHttpModule::Get().CreateRequest();
+			httpReuestGetMaterials->SetVerb(TEXT("GET"));
+			httpReuestGetMaterials->SetHeader(TEXT("Content-Type"), TEXT("APPLICATION/x-www-from-urlencoded"));
+			httpReuestGetMaterials->SetURL(urlOfGetMaterials);
+			httpReuestGetMaterials->OnProcessRequestComplete().BindUObject(this, &AMyActor::OnRequestComplete_GetMaterials);
+			httpReuestGetMaterials->ProcessRequest();
+		}
+	}
 }
