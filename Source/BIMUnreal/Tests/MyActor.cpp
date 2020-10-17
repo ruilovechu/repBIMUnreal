@@ -5,7 +5,7 @@
 
 #include "../Common/JsonHandler.h"
 #include "../Common/UrlsHandler.h"
-#include "../Model/FElement.h"
+
 #include "../Common/StringHandler.h"
 
 #include "Interfaces/IHttpResponse.h"
@@ -21,6 +21,7 @@
 #include "IImageWrapper.h"
 #include "Modules/ModuleManager.h"
 #include "IImageWrapperModule.h"
+#include "../Model/FBlockMapping_Item.h"
 
 #include "Engine/Texture2DDynamic.h"
 #include "Engine/Engine.h"
@@ -173,17 +174,7 @@ void AMyActor::BeginPlay()
 	// ------------
 	// https://bimcomposer.probim.cn/api/Model/GetAllElementsInView?ProjectID=7d96928d-5add-45cb-a139-2c787141e50d&ModelID=9f49078c-180e-4dc5-b696-5a50a9e09016&VersionNO=&ViewID=142554
 	AUrlsHandler::InitParameters(FString("46d11566-6b7e-47a1-ba5d-12761ab9b55c"), FString("67170069-1711-4f4c-8ee0-a715325942a1"), FString("69323"));
-	FString allEleurls = AUrlsHandler::GetUrlOfGetAllElements();
-	UE_LOG(LogTemp, Error, TEXT("allEleurls == %s"), *allEleurls);
-
-	// 请求接口测试
-	// ------------
-	TSharedRef<IHttpRequest> httpReuest = FHttpModule::Get().CreateRequest();
-	httpReuest->SetVerb(TEXT("GET"));
-	httpReuest->SetHeader(TEXT("Content-Type"), TEXT("APPLICATION/x-www-from-urlencoded"));
-	httpReuest->SetURL(allEleurls);
-	httpReuest->OnProcessRequestComplete().BindUObject(this, &AMyActor::OnRequestComplete_AllElementsInView);
-	httpReuest->ProcessRequest();
+	
 
 
 
@@ -206,6 +197,7 @@ void AMyActor::BeginPlay()
 	//httpReuestimg->OnProcessRequestComplete().BindUObject(this, &AMyActor::setTextureFromLoadImg);
 	//httpReuestimg->ProcessRequest();
 
+#if 0
 	// json 操作测试
 	// -------------
 	FString server_data;
@@ -217,6 +209,7 @@ void AMyActor::BeginPlay()
 	JsonWriter->WriteValue("password1", ("000000"));
 	JsonWriter->WriteObjectEnd();
 	JsonWriter->Close();
+
 
 	//UE_LOG(LogTemp, Warning, TEXT("%s"), *server_data);
 
@@ -254,6 +247,7 @@ void AMyActor::BeginPlay()
 			UE_LOG(LogTemp, Warning, TEXT("-- %s, %d"), *FStringName, sex);
 		}
 	}
+#endif
 }
 
 void AMyActor::OnRequestComplete_AllElementsInView(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bConnectedSuccessfully)
@@ -349,7 +343,12 @@ void AMyActor::OnRequestComplete_AllElementsInView(FHttpRequestPtr Request, FHtt
 
 			// 打印输出 eles 的个数
 			// --------------------
+			UE_LOG(LogTemp, Warning, TEXT("eles' count is %d"), eles.Num());
 			//UE_LOG(LogTemp, Error, TEXT("7 ---- %d"), (eles[eles.Num() - 1].BlockMapping_obj.blockMappingItems_objlist[0].transform_list.Num()));
+
+			// 根据这些 eles，来进行 Spawn Actor
+			// ---------------------------------
+			SpawnActorsByElements(eles);
 		}
 		else
 		{
@@ -377,6 +376,11 @@ void AMyActor::OnRequestComplete_CacheBlockCount(FHttpRequestPtr Request, FHttpR
 		int blockFileCount = FCString::Atoi(*ContentJson);
 		this->m_blockFileCount = blockFileCount;
 
+		// 清一下 meshSectionMap
+		// ---------------------
+		meshSectionMap.Empty();
+
+#if 0
 		// 先调用 GetMaterials
 		// -------------------
 		FString urlOfMaterials = AUrlsHandler::GetUrlOfGetMaterials();
@@ -386,6 +390,27 @@ void AMyActor::OnRequestComplete_CacheBlockCount(FHttpRequestPtr Request, FHttpR
 		httpReuestMtr->SetURL(urlOfMaterials);
 		httpReuestMtr->OnProcessRequestComplete().BindUObject(this, &AMyActor::OnRequestComplete_GetMaterials);
 		httpReuestMtr->ProcessRequest();
+#endif
+
+		// 从1开始，针对每个数字，再调用 https://bimcomposer.probim.cn/api/Model/GetCacheBlock?FileID=1&ProjectID=46d11566-6b7e-47a1-ba5d-12761ab9b55c&ModelID=58080653-18d1-4067-b480-e02c56eb791a&VersionNO=&ViewID=168550
+		// -------------------------------------------------------------------------------------------
+		for (int i = 1; i <= m_blockFileCount; i++)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("to call GetCacheBlock?FileID= %d"), i);
+
+			// 得到当前的 url 地址
+			// -------------------
+
+			// 请求接口测试2
+			// -------------
+			FString urlOfCacheBlock = AUrlsHandler::GetUrlOfGetCacheBlock(i);
+			TSharedRef<IHttpRequest> httpReuestTemp = FHttpModule::Get().CreateRequest();
+			httpReuestTemp->SetVerb(TEXT("GET"));
+			httpReuestTemp->SetHeader(TEXT("Content-Type"), TEXT("APPLICATION/x-www-from-urlencoded"));
+			httpReuestTemp->SetURL(urlOfCacheBlock);
+			httpReuestTemp->OnProcessRequestComplete().BindUObject(this, &AMyActor::OnRequestComplete_GetCacheBlock);
+			httpReuestTemp->ProcessRequest();
+		}
 
 
 		
@@ -414,8 +439,28 @@ void AMyActor::OnRequestComplete_GetCacheBlock(FHttpRequestPtr Request, FHttpRes
 		BYTE* buffer = reinterpret_cast<BYTE*>(resBuffer.GetData());
 
 		// 调用方法，解析这个字节数组
+		// 里面构造了 meshSectionMap
 		// --------------------------
 		AMyActor::AnalysisBuffer(buffer, resBuffer.Num());
+
+		this->m_blockFileRead++;
+
+		// 判断如果调用完最后一次的block file文件，则开始调用GetAllElementsInView
+		// ----------------------------------------------------------------------
+		if (this->m_blockFileRead == this->m_blockFileCount)
+		{
+			FString allEleurls = AUrlsHandler::GetUrlOfGetAllElements();
+			UE_LOG(LogTemp, Error, TEXT("allEleurls == %s"), *allEleurls);
+
+			// 请求接口测试
+			// ------------
+			TSharedRef<IHttpRequest> httpReuest = FHttpModule::Get().CreateRequest();
+			httpReuest->SetVerb(TEXT("GET"));
+			httpReuest->SetHeader(TEXT("Content-Type"), TEXT("APPLICATION/x-www-from-urlencoded"));
+			httpReuest->SetURL(allEleurls);
+			httpReuest->OnProcessRequestComplete().BindUObject(this, &AMyActor::OnRequestComplete_AllElementsInView);
+			httpReuest->ProcessRequest();
+		}
 	}
 }
 
@@ -489,25 +534,7 @@ void AMyActor::OnRequestComplete_GetMaterials(FHttpRequestPtr Request, FHttpResp
 
 
 
-		// 从1开始，针对每个数字，再调用 https://bimcomposer.probim.cn/api/Model/GetCacheBlock?FileID=1&ProjectID=46d11566-6b7e-47a1-ba5d-12761ab9b55c&ModelID=58080653-18d1-4067-b480-e02c56eb791a&VersionNO=&ViewID=168550
-		// -------------------------------------------------------------------------------------------
-		for (int i = 1; i <= m_blockFileCount; i++)
-		{
-			UE_LOG(LogTemp, Warning, TEXT("to call GetCacheBlock?FileID= %d"), i);
-
-			// 得到当前的 url 地址
-			// -------------------
-
-			// 请求接口测试2
-			// -------------
-			FString urlOfCacheBlock = AUrlsHandler::GetUrlOfGetCacheBlock(i);
-			TSharedRef<IHttpRequest> httpReuestTemp = FHttpModule::Get().CreateRequest();
-			httpReuestTemp->SetVerb(TEXT("GET"));
-			httpReuestTemp->SetHeader(TEXT("Content-Type"), TEXT("APPLICATION/x-www-from-urlencoded"));
-			httpReuestTemp->SetURL(urlOfCacheBlock);
-			httpReuestTemp->OnProcessRequestComplete().BindUObject(this, &AMyActor::OnRequestComplete_GetCacheBlock);
-			httpReuestTemp->ProcessRequest();
-		}
+		
 	}
 }
 
@@ -640,7 +667,7 @@ void AMyActor::AnalysisBuffer(BYTE * buffer, int size)
 			// ------
 			TArray<FVector> verticesArr;
 			TArray<FVector> normalsArr;
-			TArray<int32> indicesArr;
+			TArray<uint32> indicesArr;
 			TArray<FVector2D> uvsArr;
 			//TArray<FLinearColor> linearArr;
 
@@ -653,7 +680,7 @@ void AMyActor::AnalysisBuffer(BYTE * buffer, int size)
 				//verticesArr.Add(FVector(vertices[i] * 10, vertices[i + 1] * 10, vertices[i + 2] * 10));
 				//linearArr.Add(FLinearColor(255.0f, 0, 0, 0.8));
 				// ----------------------------------------------
-				verticesArr.Add(FVector(vertices[i] * 100, vertices[i + 1] * 100 * -1, vertices[i + 2] * 100));
+				verticesArr.Add(FVector(vertices[i] * 100, vertices[i + 1] * 100, vertices[i + 2] * 100));
 			}
 
 			// 获取索引数组
@@ -691,26 +718,45 @@ void AMyActor::AnalysisBuffer(BYTE * buffer, int size)
 				}
 			}
 
-			// 添加到数组
-			// ----------
-			FMaterialSection * section = new FMaterialSection;
-			section->m_blockId = FString(blockIdBuffer_utf8);
-			if (this->m_MapBlockMaterial.Contains(section->m_blockId))
-			{
-				section->m_MaterialId = this->m_MapBlockMaterial[section->m_blockId];
-			}
-			else
-			{
-				UE_LOG(LogTemp, Error, TEXT("m_MapBlockMaterial doesn't contains m_blockId: %s"), *section->m_blockId);
-			}
-			section->m_ProceduralMeshComp = ProceduralMeshComp;
-			section->Material = this->Material;
-			section->m_MaterialSectionIndex = MaterialSectionArr.Num();
-			section->indicesArr = indicesArr;
-			section->verticesArr = verticesArr;
-			section->normalsArr = normalsArr;
-			section->uvsArr = uvsArr;
-			MaterialSectionArr.Add(section);
+			// !
+			// 构造 FProcMeshSection
+			// 一个blockFile中的内容可能包含一个或多个block的相关数据
+			// 每一个blockId对应一个meshSection
+			// --------------------------------
+			FProcMeshSection meshSection;
+			/* 三角形顶点索引 */
+			meshSection.ProcIndexBuffer = indicesArr;
+			/* 顶点数据 */
+			meshSection.ProcVertexBuffer = ConvertVertexToProcVertex(verticesArr, uvsArr);
+			/* bSectionVisible 及 bEnableCollision */
+			meshSection.bSectionVisible = true;
+			meshSection.bEnableCollision = false;
+
+			// 添加到 meshSectionMap
+			// ---------------------
+			FString blockId = FString(blockIdBuffer_utf8);
+			meshSectionMap.Emplace(blockId, meshSection);
+
+			//// 添加到数组
+			//// ----------
+			//FMaterialSection * section = new FMaterialSection;
+			//section->m_blockId = FString(blockIdBuffer_utf8);
+			//if (this->m_MapBlockMaterial.Contains(section->m_blockId))
+			//{
+			//	section->m_MaterialId = this->m_MapBlockMaterial[section->m_blockId];
+			//}
+			//else
+			//{
+			//	UE_LOG(LogTemp, Error, TEXT("m_MapBlockMaterial doesn't contains m_blockId: %s"), *section->m_blockId);
+			//}
+			//section->m_ProceduralMeshComp = ProceduralMeshComp;
+			//section->Material = this->Material;
+			//section->m_MaterialSectionIndex = MaterialSectionArr.Num();
+			//section->indicesArr = indicesArr;
+			//section->verticesArr = verticesArr;
+			//section->normalsArr = normalsArr;
+			//section->uvsArr = uvsArr;
+			//MaterialSectionArr.Add(section);
 
 			// 直接卸载
 			// --------
@@ -738,8 +784,9 @@ void AMyActor::AnalysisBuffer(BYTE * buffer, int size)
 		}*/
 	}
 
+#if 0
 	// 这里测试：一共有多少个 Mesh 分片
-	// --------------------------------
+// --------------------------------
 	int sectionNum = MaterialSectionArr.Num(); //ProceduralMeshComp->GetNumSections();
 	UE_LOG(LogTemp, Warning, TEXT("[721:7]MaterialSectionArr's Num is %d"), sectionNum);
 
@@ -752,12 +799,12 @@ void AMyActor::AnalysisBuffer(BYTE * buffer, int size)
 	// --------------------------
 	for (size_t i = 0; i < sectionNum; i++)
 	{
-		// 从 m_MapMaterial 找到 materialId 对应的数据
-		// -----------------------------------------
-		auto materialId = this->m_MapBlockMaterial[MaterialSectionArr[i]->m_blockId];
+		//// 从 m_MapMaterial 找到 materialId 对应的数据
+		//// -----------------------------------------
+		//auto materialId = this->m_MapBlockMaterial[MaterialSectionArr[i]->m_blockId];
 
-		FMaterial2 & mtrObj = m_MapMaterial[materialId];
-		UE_LOG(LogTemp, Warning, TEXT("[759]color is %s"), *(mtrObj.Content_Obj.appearancecolor));
+		//FMaterial2 & mtrObj = m_MapMaterial[materialId];
+		//UE_LOG(LogTemp, Warning, TEXT("[759]color is %s"), *(mtrObj.Content_Obj.appearancecolor));
 
 		// 创建Actor
 		// ---------
@@ -775,32 +822,32 @@ void AMyActor::AnalysisBuffer(BYTE * buffer, int size)
 			// -----------------------
 			theActor->ProceduralMeshComp->CreateMeshSection_LinearColor(0, MaterialSectionArr[i]->verticesArr, MaterialSectionArr[i]->indicesArr, MaterialSectionArr[i]->normalsArr, MaterialSectionArr[i]->uvsArr, TArray<FLinearColor>(), TArray<FProcMeshTangent>(), false);
 
-			// 创建动态材质实例
-			// ----------------
-			auto dynMaterial = UMaterialInstanceDynamic::Create(theActor->Material, theActor, FName(*(FString("Name_") + FString::FromInt(0))));
-			theActor->m_MaterialInstanceDyn = dynMaterial;
+			//// 创建动态材质实例
+			//// ----------------
+			//auto dynMaterial = UMaterialInstanceDynamic::Create(theActor->Material, theActor, FName(*(FString("Name_") + FString::FromInt(0))));
+			//theActor->m_MaterialInstanceDyn = dynMaterial;
 
-			// 修改这个材质的一个参数
-			// ----------------------
-			dynMaterial->SetVectorParameterValue("AV3", FLinearColor(0.4f, 0.4f, 0.4f, 1));
+			//// 修改这个材质的一个参数
+			//// ----------------------
+			//dynMaterial->SetVectorParameterValue("AV3", FLinearColor(0.4f, 0.4f, 0.4f, 1));
 
-			// 设置到这个 actor 的 Mesh 上
-			// ---------------------------
-			theActor->ProceduralMeshComp->SetMaterial(0, dynMaterial);
+			//// 设置到这个 actor 的 Mesh 上
+			//// ---------------------------
+			//theActor->ProceduralMeshComp->SetMaterial(0, dynMaterial);
 
-			// 调用接口，获取贴图
-			// ------------------
-			if (mtrObj.Content_Obj.img != FString(""))
-			{
-				TSharedRef<IHttpRequest> httpReuestimg = FHttpModule::Get().CreateRequest();
-				httpReuestimg->SetVerb(TEXT("GET"));
-				httpReuestimg->SetHeader(TEXT("Content-Type"), TEXT("APPLICATION/x-www-from-urlencoded"));
-				httpReuestimg->SetURL(AUrlsHandler::GetUrlOfGetTextureFile(mtrObj.Content_Obj.img));
-				httpReuestimg->OnProcessRequestComplete().BindUObject(theActor, &AElementActor::setTextureFromLoadImg3);
-				httpReuestimg->ProcessRequest();
-			}
+			//// 调用接口，获取贴图
+			//// ------------------
+			//if (mtrObj.Content_Obj.img != FString(""))
+			//{
+			//	TSharedRef<IHttpRequest> httpReuestimg = FHttpModule::Get().CreateRequest();
+			//	httpReuestimg->SetVerb(TEXT("GET"));
+			//	httpReuestimg->SetHeader(TEXT("Content-Type"), TEXT("APPLICATION/x-www-from-urlencoded"));
+			//	httpReuestimg->SetURL(AUrlsHandler::GetUrlOfGetTextureFile(mtrObj.Content_Obj.img));
+			//	httpReuestimg->OnProcessRequestComplete().BindUObject(theActor, &AElementActor::setTextureFromLoadImg3);
+			//	httpReuestimg->ProcessRequest();
+			//}
 
-			continue;
+			//continue;
 		}
 
 		//// Create Mesh Section
@@ -838,12 +885,118 @@ void AMyActor::AnalysisBuffer(BYTE * buffer, int size)
 		//// 设置材质到 Mesh 组件
 		//// --------------------
 		//MaterialSectionArr[i]->m_ProceduralMeshComp->SetMaterial(MaterialSectionArr[i]->m_MaterialSectionIndex, MaterialSectionArr[i]->m_MaterialInstanceDyn);
-		
+
+	}
+#endif
+
+	//// 测试
+	//// -----------------------------------------------------------------------------------------------------
+	//TArray<UMaterialInterface *> mtris;
+	//ProceduralMeshComp->GetUsedMaterials(mtris);
+	//UE_LOG(LogTemp, Warning, TEXT("mtris' num is %d"), mtris.Num());
+}
+
+void AMyActor::SpawnActorsByElements(TArray<FElement> eles)
+{
+	UClass* pBlueprintClass = StaticLoadClass(AElementActor::StaticClass(), this, TEXT("Blueprint'/Game/Blueprints/Tests/BP_ElementActor.BP_ElementActor_C'"));
+	if (pBlueprintClass)
+	{
+		for (size_t i = 0; i < eles.Num(); i++)
+		{
+			// 拿到这个element 中的 blockMappingItems
+			// --------------------------------------
+			TArray<FBlockMapping_Item> items = eles[i].BlockMapping_obj.blockMappingItems_objlist;
+
+			// 遍历这些 items
+			// --------------
+			for (size_t j = 0; j < items.Num(); j++)
+			{
+				// 声明一个 Spawn 参数
+				// -------------------
+				FActorSpawnParameters SpawnPara;
+				SpawnPara.Name = FName(*(eles[i].ElementID + TEXT("_") + FString::FromInt(j)));
+
+				// 通过 items[j].transform_list 得到 Spawn 中用到的矩阵参数
+				// --------------------------------------------------------
+				FTransform actorTransform = GetElementTransform(items[j].transform_list);
+
+				// 进行 Spawn
+				// ----------
+				AElementActor* pElementActor = GetWorld()->SpawnActor<AElementActor>(pBlueprintClass, actorTransform, SpawnPara);
+
+				// 调用 loadMesh
+				// -------------
+			/*	FProcMeshSection* mesh = meshSectionMap.Find(items[j].blockId);
+				pElementActor->ProceduralMeshComp->SetProcMeshSection(0, *mesh);
+				pElementActor->ProceduralMeshComp->UpdateBounds();*/
+
+#if 1 // 未复用 Mesh 版
+
+				FProcMeshSection* mesh = meshSectionMap.Find(items[j].blockId);
+				auto vertexBuffer = mesh->ProcVertexBuffer;
+				TArray<FVector> positions;
+				TArray<FVector2D> uvos;
+				TArray<int32> indexs;
+				for (int32 k = 0; k < mesh->ProcIndexBuffer.Num(); k++)
+				{
+					indexs.Emplace(mesh->ProcIndexBuffer[k]);
+				}
+				for (int32 k = 0; k < vertexBuffer.Num(); k++)
+				{
+					positions.Emplace(vertexBuffer[k].Position);
+					uvos.Emplace(vertexBuffer[k].UV0);
+				}
+				pElementActor->ProceduralMeshComp->CreateMeshSection_LinearColor(0, positions, indexs, TArray<FVector>(), uvos, TArray<FLinearColor>(), TArray<FProcMeshTangent>(), false);
+#endif
+			}
+		}
+	}
+}
+
+// 将 TArray<FVector> 转为 FProcMeshSection对象内部需要的类型
+// ----------------------------------------------------------
+TArray<FProcMeshVertex> AMyActor::ConvertVertexToProcVertex(TArray<FVector> vertex, TArray<FVector2D> uvs)
+{
+	TArray<FProcMeshVertex> retPMV;
+	for (size_t i = 0; i < vertex.Num(); i++)
+	{
+		FProcMeshVertex pmvertex;
+		pmvertex.Position = vertex[i];
+		//vertex.Normal = normals[i];
+		if (uvs.Num() != 0)
+		{
+			pmvertex.UV0 = uvs[i];
+		}
+		retPMV.Add(pmvertex);
+	}
+	return retPMV;
+}
+
+FTransform AMyActor::GetElementTransform(TArray<double> transform_list)
+{
+	FMatrix mat;
+	//mat.M[0][0] = transform_list[0];
+	//mat.M[0][1] = transform_list[1];
+	//...
+	//mat.M[3][3] = transform_list[15];
+	for (int32 i = 0; i < 4; i++)
+	{
+		for (int32 j = 0; j < 4; j++)
+		{
+			mat.M[i][j] = transform_list[4 * i + j];
+		}
 	}
 
-	// 测试
-	// -----------------------------------------------------------------------------------------------------
-	TArray<UMaterialInterface *> mtris;
-	ProceduralMeshComp->GetUsedMaterials(mtris);
-	UE_LOG(LogTemp, Warning, TEXT("mtris' num is %d"), mtris.Num());
+	mat = mat.GetTransposed();
+
+	//UE中的坐标单位为厘米，而传入数据的坐标单位为米
+	mat.M[3][0] *= 100;
+	mat.M[3][1] *= 100;
+	mat.M[3][2] *= 100;
+
+	//mat.M[0][3] *= 100;
+	//mat.M[1][3] *= 100;
+	//mat.M[2][3] *= 100;
+
+	return FTransform(mat);
 }

@@ -14,6 +14,7 @@
 #include "../Model/FMaterialSection.h"
 #include "../Model/FMaterial.h"
 #include "../Common/OpenCTMHandler.h"
+#include "../Model/FElement.h"
 #include "MyActor.generated.h"
 
 UCLASS()
@@ -41,6 +42,7 @@ public:
 	int m_meshIndex;
 
 	int m_blockFileCount;
+	int m_blockFileRead = 0;
 
 	TMap<FString, FString> m_MapBlockMaterial;
 
@@ -57,6 +59,9 @@ public:
 
 	UPROPERTY(VisibleAnywhere, Category = ProcMesh)
 	UMaterialInstanceDynamic * MaterialInstanceDnm;*/
+
+	/* blockId 与 FProcMeshSection 的映射 */
+	TMap<FString, FProcMeshSection> meshSectionMap;
 
 protected:
 
@@ -83,4 +88,13 @@ public:
 	// -----------------
 	void AnalysisBuffer(BYTE * buffer, int size);
 
+	void SpawnActorsByElements(TArray<FElement> eles);
+
+	// 将 TArray<FVector> 转为 FProcMeshSection对象内部需要的类型
+	// ----------------------------------------------------------
+	TArray<FProcMeshVertex> ConvertVertexToProcVertex(TArray<FVector> vertex, TArray<FVector2D> uvs);
+
+	// 将 transform_list 转为 Spawn 中需要的参数
+	// -----------------------------------------
+	FTransform GetElementTransform(TArray<double> transform_list);
 };
