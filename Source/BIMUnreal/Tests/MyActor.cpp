@@ -83,6 +83,7 @@ void AMyActor::setTextureFromLoadImg(FHttpRequestPtr _request, FHttpResponsePtr 
 		temp_colorPoint = (*temp_unCompressedRGBA)[i];
 		temp_color.A = temp_colorPoint;
 		temp_arr_color.Add(temp_color);
+
 	}
 
 	uint8* DestPtr = NULL;
