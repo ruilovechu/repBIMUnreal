@@ -257,6 +257,7 @@ void AMyActor::BeginPlay()
 	// ------------
 	// https://bimcomposer.probim.cn/api/Model/GetAllElementsInView?ProjectID=7d96928d-5add-45cb-a139-2c787141e50d&ModelID=9f49078c-180e-4dc5-b696-5a50a9e09016&VersionNO=&ViewID=142554
 	AUrlsHandler::InitParameters(FString("46d11566-6b7e-47a1-ba5d-12761ab9b55c"), FString("67170069-1711-4f4c-8ee0-a715325942a1"), FString("69323"));
+	//AUrlsHandler::InitParameters(FString("c5a59333-2e8a-4cbb-8472-737ef423b30e"), FString("5963e0ee-e778-41ec-b14c-3838e82ce9b1"), FString("281591"));
 	
 	// 请求接口测试1
 	// 调用GetModel
@@ -928,7 +929,7 @@ void AMyActor::AnalysisBuffer(BYTE * buffer, int size)
 				//verticesArr.Add(FVector(vertices[i] * 10, vertices[i + 1] * 10, vertices[i + 2] * 10));
 				//linearArr.Add(FLinearColor(255.0f, 0, 0, 0.8));
 				// ----------------------------------------------
-				verticesArr.Add(FVector(vertices[i] * 100, vertices[i + 1] * 100, vertices[i + 2] * 100));
+				verticesArr.Add(FVector(vertices[i] * 100, vertices[i + 1] * -100, vertices[i + 2] * 100));
 			}
 
 			// 获取索引数组
@@ -962,7 +963,7 @@ void AMyActor::AnalysisBuffer(BYTE * buffer, int size)
 			{
 				for (size_t i = 0; i < vertex_comp_cnt; i += VERTEX_3)
 				{
-					normalsArr.Add(FVector(normals[i], normals[i + 1], normals[i + 2]));
+					normalsArr.Add(FVector(normals[i], normals[i + 1] , normals[i + 2]));
 				}
 			}
 
@@ -1251,7 +1252,7 @@ FTransform AMyActor::GetElementTransform(TArray<double> transform_list)
 
 	//UE中的坐标单位为厘米，而传入数据的坐标单位为米
 	mat.M[3][0] *= 100;
-	mat.M[3][1] *= 100;
+	mat.M[3][1] *= -100;
 	mat.M[3][2] *= 100;
 
 	//mat.M[0][3] *= 100;
