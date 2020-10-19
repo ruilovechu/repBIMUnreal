@@ -257,8 +257,8 @@ void AMyActor::BeginPlay()
 	// 地址拼接测试
 	// ------------
 	// https://bimcomposer.probim.cn/api/Model/GetAllElementsInView?ProjectID=7d96928d-5add-45cb-a139-2c787141e50d&ModelID=9f49078c-180e-4dc5-b696-5a50a9e09016&VersionNO=&ViewID=142554
-	AUrlsHandler::InitParameters(FString("46d11566-6b7e-47a1-ba5d-12761ab9b55c"), FString("67170069-1711-4f4c-8ee0-a715325942a1"), FString("69323"));
-	//AUrlsHandler::InitParameters(FString("c5a59333-2e8a-4cbb-8472-737ef423b30e"), FString("5963e0ee-e778-41ec-b14c-3838e82ce9b1"), FString("281591"));
+	//AUrlsHandler::InitParameters(FString("46d11566-6b7e-47a1-ba5d-12761ab9b55c"), FString("67170069-1711-4f4c-8ee0-a715325942a1"), FString("69323"));
+	AUrlsHandler::InitParameters(FString("46d11566-6b7e-47a1-ba5d-12761ab9b55c"), FString("726f5ad8-0123-459f-8566-475146d396ef"), FString("142554"));
 	
 	// 请求接口测试1
 	// 调用GetModel
@@ -426,6 +426,17 @@ void AMyActor::OnRequestComplete_AllElementsInView(FHttpRequestPtr Request, FHtt
 			// 根据这些 eles，来进行 Spawn Actor
 			// ---------------------------------
 			SpawnActorsByElements(eles);
+
+			UE_LOG(LogTemp, Warning, TEXT("begin to free"));
+
+			for (size_t i = 0; i < contentBufferFromCTMAnalysis.Num(); i++)
+			{
+				if (contentBufferFromCTMAnalysis[i])
+				{
+					free(contentBufferFromCTMAnalysis[i]);
+				}
+			}
+			contentBufferFromCTMAnalysis.Empty();
 		}
 		else
 		{
@@ -624,9 +635,9 @@ void AMyActor::OnRequestComplete_GetTexture(FHttpRequestPtr Request, FHttpRespon
 	}
 }
 
-void AMyActor::CreateTexture(TArray<uint8>* buffer, const FString textureName)
+void AMyActor::CreateTexture(TArray<uint8>* buffer, const FString textureName, EImageFormat defaultF)
 {
-	EImageFormat imageFormat;
+	EImageFormat imageFormat = defaultF;
 
 	if (textureName.EndsWith(TEXT("ppng")))
 	{
@@ -658,6 +669,12 @@ void AMyActor::CreateTexture(TArray<uint8>* buffer, const FString textureName)
 
 	if (!pImageWrapper->SetCompressed(buffer->GetData(), buffer->Num()))
 	{
+		//CreateTexture(buffer, textureName);
+		if (defaultF != EImageFormat::PNG)
+		{
+			CreateTexture(buffer, textureName, EImageFormat::PNG);
+		}
+
 		UE_LOG(LogTemp, Warning, TEXT("%s ImageWrapper can't Set Compressed "), *textureName);
 		return;
 	}
@@ -950,7 +967,7 @@ void AMyActor::AnalysisBuffer(BYTE * buffer, int size)
 				{
 					// 以厘米为单位
 					// ------------
-					uvsArr.Add(FVector2D(uvs[i] * 100, uvs[i + 1] * 100));
+					uvsArr.Add(FVector2D(uvs[i], uvs[i + 1]));
 					//uvsArr.Add(FVector2D(uvs[i] * 1, uvs[i + 1] * 1));
 				}
 			}
@@ -1023,8 +1040,9 @@ void AMyActor::AnalysisBuffer(BYTE * buffer, int size)
 		}
 		if (contentBuffer)
 		{
-			free(contentBuffer);
-			contentBuffer = NULL;
+			/*free(contentBuffer);
+			contentBuffer = NULL;*/
+			contentBufferFromCTMAnalysis.Add(contentBuffer);
 		}
 
 		blockloaded++;
@@ -1148,6 +1166,8 @@ void AMyActor::AnalysisBuffer(BYTE * buffer, int size)
 
 void AMyActor::SpawnActorsByElements(TArray<FElement> eles)
 {
+
+
 	UClass* pBlueprintClass = StaticLoadClass(AElementActor::StaticClass(), this, TEXT("Blueprint'/Game/Blueprints/Tests/BP_ElementActor.BP_ElementActor_C'"));
 	if (pBlueprintClass)
 	{

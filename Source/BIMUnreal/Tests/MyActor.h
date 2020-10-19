@@ -71,6 +71,8 @@ public:
 	TMap<FString, UTexture2D*> m_TextureMap;
 	TMap<FString, UMaterialInstanceDynamic*> dynamicMaterialMap;
 
+	TArray<BYTE*> contentBufferFromCTMAnalysis;
+
 	bool m_HasApperenanceColor;
 
 	class UMaterialInterface* pTextureMaterial;
@@ -116,7 +118,7 @@ public:
 
 	// 根据 buffer 及名称生成 texture
 	// ------------------------------
-	void CreateTexture(TArray<uint8>* buffer, const FString textureName);
+	void CreateTexture(TArray<uint8>* buffer, const FString textureName, EImageFormat defaultF = EImageFormat::JPEG);
 
 	// 遍历所有视图，找到那个默认视图，并进行加载？
 	// -------------------------------------------
