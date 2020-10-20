@@ -125,41 +125,26 @@ void AMyActor::setTextureFromLoadImg(FHttpRequestPtr _request, FHttpResponsePtr 
 	//httpReuest2->ProcessRequest();
 }
 
-// Sets default values
+
 AMyActor::AMyActor()
 {
- 	// Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
-	//PrimaryActorTick.bCanEverTick = true;
-
+	//1. 在构造函数中创建 UProceduralMeshComponent 组件，并指定到根组件上
+	// ------------------------------------------------------------------
 	ProceduralMeshComp = CreateDefaultSubobject<UProceduralMeshComponent>("ProceduralMeshComp");
 	RootComponent = ProceduralMeshComp;
 
-	//static ConstructorHelpers::FObjectFinder<UMaterial> MaterialOb(TEXT("Material'/Game/Materials/MTR_T1.MTR_T1'"));
-	//Material = MaterialOb.Object;
-
-	////Texture2D'/Engine/EngineMaterials/DefaultBokeh.DefaultBokeh'
-	//static ConstructorHelpers::FObjectFinder<UTexture2D> Texture2DOb(TEXT("Texture2D'/Engine/EngineMaterials/DefaultDiffuse.DefaultDiffuse'"));
-	//Texture2D = Texture2DOb.Object;
-
-	//必须放到构造函数中
+	// 待备注
+	// ------
 	static ConstructorHelpers::FObjectFinder<UMaterial> baseColorMaterialAsset(TEXT("'Material'/Game/Materials/M_BaseColor.M_BaseColor''"));
 	static ConstructorHelpers::FObjectFinder<UMaterial> textureMaterialAsset(TEXT("'Material'/Game/Materials/M_Texture.M_Texture''"));
 	static ConstructorHelpers::FObjectFinder<UMaterial> translucentMaterialAsset(TEXT("'Material'/Game/Materials/M_Translucent.M_Translucent''"));
-
 	if (baseColorMaterialAsset.Succeeded())
 		pBaseColorMaterial = baseColorMaterialAsset.Object;
-
 	if (textureMaterialAsset.Succeeded())
 		pTextureMaterial = textureMaterialAsset.Object;
-
 	if (translucentMaterialAsset.Succeeded())
 		pTranslucentMaterial = translucentMaterialAsset.Object;
 
-
-	//Texture2D
-
-	/*static ConstructorHelpers::FObjectFinder<UMaterialInstance> MaterialInsOb(TEXT("MaterialInstanceConstant'/Game/MaterialInstances/MTR_T1_Inst.MTR_T1_Inst'"));
-	MaterialInstance = MaterialInsOb.Object;*/
 }
 
 void AMyActor::CreateTranslucentMaterial(const FString materialId, FColor baseColor, FMaterialContent& content)
@@ -232,37 +217,30 @@ void AMyActor::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// 初始化 CTM 的 content 句柄
-	// [TODO]暂未释放
-	// --------------
+	//2. 初始化 CTM 的 content 句柄，注意！该句柄暂未释放
+	// --------------------------------------------------
 	this->context = AOpenCTMHandler::m_CtmNewContext(CTMenum::CTM_IMPORT);
 
+	//3. 清空一些数组与 map
+	// --------------------
 	// 清空 blockId 与 materialId 的 map
-	// ---------------------------------
 	m_MapBlockMaterial.Empty();
-
 	// 清空 m_MapMaterial 数据
-	// -----------------------
 	m_MapMaterial.Empty();
-
 	// 清空 m_TextureNameSet 数据
-	// --------------------------
 	m_TextureNameSet.Empty();
 	m_TextureMap.Empty();
-
 	// 清掉所有的 MeshSection !
-	// ------------------------
 	ProceduralMeshComp->ClearAllMeshSections();
 
-	// 地址拼接测试
-	// ------------
+	//4. 初始化ProjectID、ModelID与ViewID
 	// https://bimcomposer.probim.cn/api/Model/GetAllElementsInView?ProjectID=7d96928d-5add-45cb-a139-2c787141e50d&ModelID=9f49078c-180e-4dc5-b696-5a50a9e09016&VersionNO=&ViewID=142554
-	//AUrlsHandler::InitParameters(FString("46d11566-6b7e-47a1-ba5d-12761ab9b55c"), FString("67170069-1711-4f4c-8ee0-a715325942a1"), FString("69323"));
-	AUrlsHandler::InitParameters(FString("46d11566-6b7e-47a1-ba5d-12761ab9b55c"), FString("726f5ad8-0123-459f-8566-475146d396ef"), FString("142554"));
+	// ----------------------------------
+	AUrlsHandler::InitParameters(FString("46d11566-6b7e-47a1-ba5d-12761ab9b55c"), FString("67170069-1711-4f4c-8ee0-a715325942a1"), FString("69323"));
+	//AUrlsHandler::InitParameters(FString("46d11566-6b7e-47a1-ba5d-12761ab9b55c"), FString("726f5ad8-0123-459f-8566-475146d396ef"), FString("142554"));
 	
-	// 请求接口测试1
-	// 调用GetModel
-	// ------------
+	//5. 调用GetModel接口
+	// ------------------
 	FString urlOfGetModel = AUrlsHandler::GetUrlOfGetModel();
 	TSharedRef<IHttpRequest> httpReuestGetModel = FHttpModule::Get().CreateRequest();
 	httpReuestGetModel->SetVerb(TEXT("GET"));
@@ -270,7 +248,6 @@ void AMyActor::BeginPlay()
 	httpReuestGetModel->SetURL(urlOfGetModel);
 	httpReuestGetModel->OnProcessRequestComplete().BindUObject(this, &AMyActor::OnRequestComplete_GetModel);
 	httpReuestGetModel->ProcessRequest();
-
 	
 }
 
@@ -283,8 +260,8 @@ void AMyActor::OnRequestComplete_GetModel(FHttpRequestPtr Request, FHttpResponse
 
 	if (bConnectedSuccessfully)
 	{
-		// 将返回的json进行反序列化
-		// ------------------------
+		//6. 将GetModel返回的json进行反序列化，得到单模型对多视图的内存数据
+		// ----------------------------------------------------------------
 		FString contentStr = Response->GetContentAsString();
 
 		FModelInfo modelInfo;
@@ -318,8 +295,8 @@ void AMyActor::OnRequestComplete_GetModel(FHttpRequestPtr Request, FHttpResponse
 				modelInfo.Views_objlist.Add(viewinfo);
 			}
 
-			// 遍历所有视图，找到那个默认视图，并进行加载？
-			// -------------------------------------------
+			//7. 遍历所有视图，找到那个默认视图，并进行加载
+			// --------------------------------------------
 			ReadViewInfos(modelInfo.Views_objlist);
 		}
 
@@ -347,15 +324,12 @@ void AMyActor::OnRequestComplete_AllElementsInView(FHttpRequestPtr Request, FHtt
 		bool BFlag = AJsonHandler::DeserializeList(ContentJson, &originParsed);
 		if (BFlag) 
 		{
-			// 反序列化成功后，解析为对象
-			// --------------------------
+			//22. 拿到 Element 数据
+			// 必须是未继承于 AActor 的类才可以手动构造
+			// ----------------------------------------
 			TArray<FElement> eles;
-
 			for (int i = 0; i < originParsed.Num(); i++ )
 			{
-				// 这里构造 AElement 的对象，但是为什么无法构造？
-				// 必须是未继承于 AActor 的类才可以手动构造，并辅助进行数据处理
-				// ------------------------------------------------------------
 				FElement ele;
 				ele.ElementID = AJsonHandler::TryGetStringField(originParsed[i], FString("ElementID"), FString(""));
 				ele.Name = AJsonHandler::TryGetStringField(originParsed[i], FString("Name"), FString(""));
@@ -418,17 +392,12 @@ void AMyActor::OnRequestComplete_AllElementsInView(FHttpRequestPtr Request, FHtt
 				eles.Add(ele);
 			}
 
-			// 打印输出 eles 的个数
-			// --------------------
-			UE_LOG(LogTemp, Warning, TEXT("eles' count is %d"), eles.Num());
-			//UE_LOG(LogTemp, Error, TEXT("7 ---- %d"), (eles[eles.Num() - 1].BlockMapping_obj.blockMappingItems_objlist[0].transform_list.Num()));
-
-			// 根据这些 eles，来进行 Spawn Actor
-			// ---------------------------------
+			//23. 根据这些 eles，来进行 Spawn Actor
+			// ------------------------------------
 			SpawnActorsByElements(eles);
 
-			UE_LOG(LogTemp, Warning, TEXT("begin to free"));
-
+			//24. 统一释放堆内存，提前释放的话会导致构件丢失
+			// ---------------------------------------------
 			for (size_t i = 0; i < contentBufferFromCTMAnalysis.Num(); i++)
 			{
 				if (contentBufferFromCTMAnalysis[i])
@@ -468,18 +437,7 @@ void AMyActor::OnRequestComplete_CacheBlockCount(FHttpRequestPtr Request, FHttpR
 		// ---------------------
 		meshSectionMap.Empty();
 
-#if 0
-		// 先调用 GetMaterials
-		// -------------------
-		FString urlOfMaterials = AUrlsHandler::GetUrlOfGetMaterials();
-		TSharedRef<IHttpRequest> httpReuestMtr = FHttpModule::Get().CreateRequest();
-		httpReuestMtr->SetVerb(TEXT("GET"));
-		httpReuestMtr->SetHeader(TEXT("Content-Type"), TEXT("APPLICATION/x-www-from-urlencoded"));
-		httpReuestMtr->SetURL(urlOfMaterials);
-		httpReuestMtr->OnProcessRequestComplete().BindUObject(this, &AMyActor::OnRequestComplete_GetMaterials);
-		httpReuestMtr->ProcessRequest();
-#endif
-
+		//20. 拿到 block个数之后，按每个文件地址来获取 blockContent
 		// 从1开始，针对每个数字，再调用 https://bimcomposer.probim.cn/api/Model/GetCacheBlock?FileID=1&ProjectID=46d11566-6b7e-47a1-ba5d-12761ab9b55c&ModelID=58080653-18d1-4067-b480-e02c56eb791a&VersionNO=&ViewID=168550
 		// -------------------------------------------------------------------------------------------
 		for (int i = 1; i <= m_blockFileCount; i++)
@@ -533,15 +491,12 @@ void AMyActor::OnRequestComplete_GetCacheBlock(FHttpRequestPtr Request, FHttpRes
 
 		this->m_blockFileRead++;
 
-		// 判断如果调用完最后一次的block file文件，则开始调用GetAllElementsInView
-		// ----------------------------------------------------------------------
+		//21. 判断如果调用完最后一次的block file文件，则开始调用GetAllElementsInView
+		// -------------------------------------------------------------------------
 		if (this->m_blockFileRead == this->m_blockFileCount)
 		{
 			FString allEleurls = AUrlsHandler::GetUrlOfGetAllElements();
 			UE_LOG(LogTemp, Error, TEXT("allEleurls == %s"), *allEleurls);
-
-			// 请求接口测试
-			// ------------
 			TSharedRef<IHttpRequest> httpReuest = FHttpModule::Get().CreateRequest();
 			httpReuest->SetVerb(TEXT("GET"));
 			httpReuest->SetHeader(TEXT("Content-Type"), TEXT("APPLICATION/x-www-from-urlencoded"));
@@ -561,42 +516,32 @@ void AMyActor::OnRequestComplete_GetTexture(FHttpRequestPtr Request, FHttpRespon
 
 	if (bConnectedSuccessfully)
 	{
-		TArray<uint8> imageData = Response->GetContent();
-		UE_LOG(LogTemp, Warning, TEXT("imageData's length = %d"), imageData.Num());
-
-		//从URL中提取纹理的名称
-		// --------------------
+		//14.根据 buffer 生成 Texture，并添加到 TextureMap
+		// -----------------------------------------------
 		FString fileName = Request->GetURLParameter("FileName");
-
-		// 根据 buffer 生成 Texture，并添加到 TextureMap
-		// ---------------------------------------------
+		TArray<uint8> imageData = Response->GetContent();
 		CreateTexture(&imageData, fileName);
 		this->m_TextureCount++;
 
-		// 全部纹理生成完成后，创建材质
-		// ----------------------------
+		//15. 下载完全部贴图后，开始创建材质
+		// ---------------------------------
 		if (this->m_TextureNameSet.Num() == m_TextureCount)
 		{
-			UE_LOG(LogTemp, Warning, TEXT("Begin to Create Material"));
-
-			// 创建材质并添加到 dynamicMaterialMap
-			// -----------------------------------
+			// 16. 创建材质并添加到 dynamicMaterialMap
+			// ---------------------------------------
 			for (auto material : this->m_MapMaterial)
 			{
+				//17. 得到基础颜色
+				// ---------------
 				FMaterialContent materialContent = material.Value.Content_Obj;
-
 				FString colorHex = materialContent.tinttoggle ? (!materialContent.tintcolor.IsEmpty() ? materialContent.tintcolor : TEXT("d6f5fc"))
 					: (this->m_HasApperenanceColor ? (!materialContent.appearancecolor.IsEmpty() ? materialContent.appearancecolor : TEXT("d6f5fc"))
 						: (!materialContent.color.IsEmpty() ? materialContent.color : TEXT("d6f5fc")));
-
 				colorHex = TEXT("#") + colorHex;
+				FColor color = FColor::FromHex(colorHex);
 
-				auto color = FColor::FromHex(colorHex);
-
-				//UMaterialInstanceDynamic* pMaterialInstance;
-				FString imgName = materialContent.img;
-
-				//判断是否是半透明材质
+				//18. 根据不同情况创建材质实例
+				// ---------------------------
 				if (materialContent.tp < 1.0f)
 				{
 					//创建半透明材质
@@ -604,7 +549,7 @@ void AMyActor::OnRequestComplete_GetTexture(FHttpRequestPtr Request, FHttpRespon
 				}
 				else
 				{
-					if (!imgName.IsEmpty() && this->m_TextureMap.Contains(imgName))
+					if (!materialContent.img.IsEmpty() && this->m_TextureMap.Contains(materialContent.img))
 					{
 						//创建纹理材质
 						CreateTextureMaterial(material.Key, color, materialContent);
@@ -618,11 +563,8 @@ void AMyActor::OnRequestComplete_GetTexture(FHttpRequestPtr Request, FHttpRespon
 
 			}
 		
-			// 请求 blockCount 等后续操作
-			// --------------------------
-			// 请求接口测试2
-			// 后续放到 GetModel的 回调中
-			// --------------------------
+			//19. 已经下载完全部贴图且材质创建完成，开始调用GetCacheBlockCount
+			// ---------------------------------------------------------------
 			FString urlOfCacheBlockCnt = AUrlsHandler::GetUrlOfGetBlockCacheCount();
 			TSharedRef<IHttpRequest> httpReuest2 = FHttpModule::Get().CreateRequest();
 			httpReuest2->SetVerb(TEXT("GET"));
@@ -716,18 +658,10 @@ void AMyActor::OnRequestComplete_GetMaterials(FHttpRequestPtr Request, FHttpResp
 	if (bConnectedSuccessfully)
 	{
 		FString allMaterials = Response->GetContentAsString();
-
-		// 将 allMaterials 反序列化为实体
-		// ------------------------------
 		TArray<TSharedPtr<FJsonValue>> originParsed;
 		bool BFlag = AJsonHandler::DeserializeList(allMaterials, &originParsed);
 		if (BFlag)
 		{
-			//// 贴图名称的 Set
-			//// --------------
-			//TSet<FString> textureNameSet;
-			//int textureCount;
-
 			for (size_t i = 0; i < originParsed.Num(); i++)
 			{
 				FMaterial2 mtr;
@@ -772,21 +706,20 @@ void AMyActor::OnRequestComplete_GetMaterials(FHttpRequestPtr Request, FHttpResp
 					mtr.Content_Obj.vsc = AJsonHandler::TryGetNumberField_FromObj(JsonObject, FString("vsc"), 0.0f);
 				}
 
-				//m_Materials.Add(mtr);
-				// 添加材质id 与 内容的 map
-				// ------------------------
+				//11. 将MaterialId 与 Material本身添加到map中存储起来
+				// --------------------------------------------------
 				m_MapMaterial.Add(mtr.ID, mtr);
 
-				// 如果有贴图，添加名称到 Set 中
-				// -----------------------------
+				//12. 如果有贴图，添加名称到 Set 中
+				// --------------------------------
 				if (!mtr.Content_Obj.img.IsEmpty())
 				{
 					m_TextureNameSet.Add(mtr.Content_Obj.img);
 				}
 			}
 
-			// 遍历 m_TextureNameSet，来下载贴图
-			// -------------------------------
+			//13. 遍历这些贴图，并进行下载
+			// ---------------------------
 			for (auto textureName : m_TextureNameSet)
 			{
 				FString urlOfGetTexture = AUrlsHandler::GetUrlOfGetTextureFile(textureName);
@@ -1004,27 +937,6 @@ void AMyActor::AnalysisBuffer(BYTE * buffer, int size)
 			FString blockId = FString(blockIdBuffer_utf8);
 			meshSectionMap.Emplace(blockId, meshSection);
 
-			//// 添加到数组
-			//// ----------
-			//FMaterialSection * section = new FMaterialSection;
-			//section->m_blockId = FString(blockIdBuffer_utf8);
-			//if (this->m_MapBlockMaterial.Contains(section->m_blockId))
-			//{
-			//	section->m_MaterialId = this->m_MapBlockMaterial[section->m_blockId];
-			//}
-			//else
-			//{
-			//	UE_LOG(LogTemp, Error, TEXT("m_MapBlockMaterial doesn't contains m_blockId: %s"), *section->m_blockId);
-			//}
-			//section->m_ProceduralMeshComp = ProceduralMeshComp;
-			//section->Material = this->Material;
-			//section->m_MaterialSectionIndex = MaterialSectionArr.Num();
-			//section->indicesArr = indicesArr;
-			//section->verticesArr = verticesArr;
-			//section->normalsArr = normalsArr;
-			//section->uvsArr = uvsArr;
-			//MaterialSectionArr.Add(section);
-
 			// 直接卸载
 			// --------
 			//AOpenCTMHandler::m_CtmFreeContext(context);
@@ -1040,128 +952,12 @@ void AMyActor::AnalysisBuffer(BYTE * buffer, int size)
 		}
 		if (contentBuffer)
 		{
-			/*free(contentBuffer);
-			contentBuffer = NULL;*/
 			contentBufferFromCTMAnalysis.Add(contentBuffer);
 		}
 
 		blockloaded++;
-		/*if (blockloaded == 32)
-		{
-			break;
-		}*/
+		
 	}
-
-#if 0
-	// 这里测试：一共有多少个 Mesh 分片
-// --------------------------------
-	int sectionNum = MaterialSectionArr.Num(); //ProceduralMeshComp->GetNumSections();
-	UE_LOG(LogTemp, Warning, TEXT("[721:7]MaterialSectionArr's Num is %d"), sectionNum);
-
-	// test
-	// ----
-	int mapnum = m_MapBlockMaterial.Num();
-	UE_LOG(LogTemp, Warning, TEXT("map's num is %d"), mapnum);
-
-	// 测试，遍历并赋予 Texture2D
-	// --------------------------
-	for (size_t i = 0; i < sectionNum; i++)
-	{
-		//// 从 m_MapMaterial 找到 materialId 对应的数据
-		//// -----------------------------------------
-		//auto materialId = this->m_MapBlockMaterial[MaterialSectionArr[i]->m_blockId];
-
-		//FMaterial2 & mtrObj = m_MapMaterial[materialId];
-		//UE_LOG(LogTemp, Warning, TEXT("[759]color is %s"), *(mtrObj.Content_Obj.appearancecolor));
-
-		// 创建Actor
-		// ---------
-		//UClass* pBlueprintClass = StaticLoadClass(AElementActor::StaticClass(), nullptr, TEXT("Blueprint'/Game/Blueprints/Tests/BP_ElementActor.BP_ElementActor_C'"));
-		UClass* pBlueprintClass = StaticLoadClass(AElementActor::StaticClass(), this, TEXT("Blueprint'/Game/Blueprints/Tests/BP_ElementActor.BP_ElementActor_C'"));
-
-		if (pBlueprintClass)
-		{
-			// 动态添加一个 Actor
-			// ------------------
-			AElementActor * theActor = GetWorld()->SpawnActor<AElementActor>(pBlueprintClass);
-
-			// 为这个刚添加的 Actor 创建 Mesh 分片
-			// 每个Actor只负责一个分片
-			// -----------------------
-			theActor->ProceduralMeshComp->CreateMeshSection_LinearColor(0, MaterialSectionArr[i]->verticesArr, MaterialSectionArr[i]->indicesArr, MaterialSectionArr[i]->normalsArr, MaterialSectionArr[i]->uvsArr, TArray<FLinearColor>(), TArray<FProcMeshTangent>(), false);
-
-			//// 创建动态材质实例
-			//// ----------------
-			//auto dynMaterial = UMaterialInstanceDynamic::Create(theActor->Material, theActor, FName(*(FString("Name_") + FString::FromInt(0))));
-			//theActor->m_MaterialInstanceDyn = dynMaterial;
-
-			//// 修改这个材质的一个参数
-			//// ----------------------
-			//dynMaterial->SetVectorParameterValue("AV3", FLinearColor(0.4f, 0.4f, 0.4f, 1));
-
-			//// 设置到这个 actor 的 Mesh 上
-			//// ---------------------------
-			//theActor->ProceduralMeshComp->SetMaterial(0, dynMaterial);
-
-			//// 调用接口，获取贴图
-			//// ------------------
-			//if (mtrObj.Content_Obj.img != FString(""))
-			//{
-			//	TSharedRef<IHttpRequest> httpReuestimg = FHttpModule::Get().CreateRequest();
-			//	httpReuestimg->SetVerb(TEXT("GET"));
-			//	httpReuestimg->SetHeader(TEXT("Content-Type"), TEXT("APPLICATION/x-www-from-urlencoded"));
-			//	httpReuestimg->SetURL(AUrlsHandler::GetUrlOfGetTextureFile(mtrObj.Content_Obj.img));
-			//	httpReuestimg->OnProcessRequestComplete().BindUObject(theActor, &AElementActor::setTextureFromLoadImg3);
-			//	httpReuestimg->ProcessRequest();
-			//}
-
-			//continue;
-		}
-
-		//// Create Mesh Section
-		//// CreateMeshSection_LinearColor 推荐使用此方法
-		//// --------------------------------------------
-		//MaterialSectionArr[i]->m_ProceduralMeshComp->CreateMeshSection_LinearColor(i, MaterialSectionArr[i]->verticesArr, MaterialSectionArr[i]->indicesArr, MaterialSectionArr[i]->normalsArr, MaterialSectionArr[i]->uvsArr, TArray<FLinearColor>(), TArray<FProcMeshTangent>(), false);
-
-		//// 指向材质
-		//// --------
-		//MaterialSectionArr[i]->m_MaterialInstanceDyn = UMaterialInstanceDynamic::Create(this->Material, this, FName(*(FString("MI_Dynamic") + FString::FromInt(i))));
-
-		//// 设置材质参数 颜色
-		//// -----------------
-		///*	MaterialSectionArr[i]->m_MaterialInstanceDyn->SetVectorParameterValue("AV3", FLinearColor(100.0f, 0,0, 0.2));*/
-
-		//// 调用接口，获取贴图
-		//// ------------------
-		//if (mtrObj.Content_Obj.img != FString(""))
-		//{
-		//	TSharedRef<IHttpRequest> httpReuestimg = FHttpModule::Get().CreateRequest();
-		//	httpReuestimg->SetVerb(TEXT("GET"));
-		//	httpReuestimg->SetHeader(TEXT("Content-Type"), TEXT("APPLICATION/x-www-from-urlencoded"));
-		//	httpReuestimg->SetURL(AUrlsHandler::GetUrlOfGetTextureFile(mtrObj.Content_Obj.img));
-		//	httpReuestimg->OnProcessRequestComplete().BindRaw(MaterialSectionArr[i], &FMaterialSection::setTextureFromLoadImg2);
-		//	httpReuestimg->ProcessRequest();
-
-		//	// 设置材质参数 贴图
-		//	// -----------------
-		//	//if (tmpTexture)//MaterialSectionArr[i]->Texture2D)
-		//	//{
-		//	//	MaterialSectionArr[i]->m_MaterialInstanceDyn->SetTextureParameterValue("TV5", tmpTexture);// MaterialSectionArr[i]->Texture2D);
-		//	//}
-		//}
-
-		//// 设置材质到 Mesh 组件
-		//// --------------------
-		//MaterialSectionArr[i]->m_ProceduralMeshComp->SetMaterial(MaterialSectionArr[i]->m_MaterialSectionIndex, MaterialSectionArr[i]->m_MaterialInstanceDyn);
-
-	}
-#endif
-
-	//// 测试
-	//// -----------------------------------------------------------------------------------------------------
-	//TArray<UMaterialInterface *> mtris;
-	//ProceduralMeshComp->GetUsedMaterials(mtris);
-	//UE_LOG(LogTemp, Warning, TEXT("mtris' num is %d"), mtris.Num());
 }
 
 void AMyActor::SpawnActorsByElements(TArray<FElement> eles)
@@ -1193,6 +989,7 @@ void AMyActor::SpawnActorsByElements(TArray<FElement> eles)
 				// 进行 Spawn
 				// ----------
 				AElementActor* pElementActor = GetWorld()->SpawnActor<AElementActor>(pBlueprintClass, actorTransform, SpawnPara);
+				pElementActor->ElementID = eles[i].ElementID;
 
 				// 调用 loadMesh
 				// -------------
@@ -1289,10 +1086,12 @@ void AMyActor::ReadViewInfos(TArray<FViewInfo> viewInfos)
 {
 	for (int i = 0; i < viewInfos.Num(); i++)
 	{
+		//8. 该视图为默认视图，按这个视图进行加载
+		// --------------------------------------
 		if (viewInfos[i].IsDefault)
 		{
-			// TODO what?
-			// ----------
+			//9. 确定 m_HasApperenanceColor 的值
+			// ---------------------------------
 			TArray<FString> overrides;
 			overrides.Emplace(TEXT("Rendering"));
 			overrides.Emplace(TEXT("Realistic"));
@@ -1308,8 +1107,8 @@ void AMyActor::ReadViewInfos(TArray<FViewInfo> viewInfos)
 			}
 			this->m_HasApperenanceColor = hasApperenanceColor;
 
-			// 加载材质，内部用到 m_HasApperenanceColor
-			// ----------------------------------------
+			//10. 调用GetMaterials接口
+			// -----------------------
 			FString urlOfGetMaterials = AUrlsHandler::GetUrlOfGetMaterials();
 			TSharedRef<IHttpRequest> httpReuestGetMaterials = FHttpModule::Get().CreateRequest();
 			httpReuestGetMaterials->SetVerb(TEXT("GET"));

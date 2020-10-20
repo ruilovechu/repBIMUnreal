@@ -35,6 +35,9 @@ public:
 	UPROPERTY(VisibleAnywhere, Category = ProcMesh)
 	UTexture2D * Texture2D;
 
+	UPROPERTY(VisibleAnywhere, Category = "Debug")
+	FString ElementID;
+
 	// 所指向的动态材质实例
 	// --------------------
 	UMaterialInstanceDynamic *	m_MaterialInstanceDyn;
